@@ -21,8 +21,8 @@ export const PERSONAS = {
       },
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       hostile: ['all good, i\'ll path around you', 'no problem, moving on'],
-      mention: ['yeah?', 'what\'s up'],
-      whisper: ['hey, what\'s up?', 'yeah?'],
+      mention: ['ghost grinding, you?', 'just grinding ghosts, what\'s up'],
+      whisper: ['hey, what\'s up?', 'grinding ghosts, you need something?'],
     },
   },
 
@@ -55,8 +55,8 @@ export const PERSONAS = {
         'imagine calling consistency a hack',
       ],
       hostile: ['it\'s a public lobby, genius', 'i was here first but sure'],
-      mention: ['what', 'yeah?'],
-      whisper: ['what do you want', 'yeah?'],
+      mention: ['ghosts, same as yesterday', 'grinding. you?'],
+      whisper: ['grinding ghosts, what do you need', 'yeah? bit busy'],
     },
   },
 

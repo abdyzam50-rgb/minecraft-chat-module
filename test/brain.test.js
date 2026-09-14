@@ -359,3 +359,37 @@ test('typing delay scales with the length of what was typed', async () => {
     return said[0].delayMs;
   }
 });
+
+test('a friendly question is answered, not brushed off', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'ghost grinding, been at it since 4am', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 9 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
+
+  assert.equal(said.length, 1);
+  assert.equal(said[0].trigger, 'mention', 'a friendly question is not an accusation');
+  assert.equal(said[0].anger, null, 'and carries no anger');
+
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /not testing you/);
+  assert.match(prompt, /actually answer it/);
+});
+
+test('a hostile mention keeps the attitude', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'not macroing mate', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: 3172 ur obviously cheating' });
+
+  const prompt = capture.params.messages[0].content;
+  assert.doesNotMatch(prompt, /not testing you/, 'the friendly framing must not leak onto an accusation');
+});

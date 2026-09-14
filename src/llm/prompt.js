@@ -104,6 +104,18 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push('', `Reply to ${trigger.subject}. Call them "${subjectShort}".`);
   }
 
+  // A mention or whisper only reaches here when nothing hostile matched, so by
+  // definition it is someone just talking. Without this the grind context and
+  // the persona both push towards a brush-off, and snapping "what" at someone
+  // asking a normal question is the least human thing the bot could do.
+  if (trigger.kind === 'mention' || trigger.kind === 'whisper') {
+    lines.push(
+      '',
+      'This one is not testing you — they are just talking to you. Answer them properly, the way you would answer someone standing next to you at the same grind. Keep the attitude for people being deliberately annoying.',
+      'If they asked something, actually answer it before anything else.',
+    );
+  }
+
   if (trigger.anger) {
     const persona = getPersona(config.persona);
     lines.push('', ANGER[trigger.anger] ?? ANGER[1]);
