@@ -1,0 +1,31 @@
+{
+  "name": "minecraft-chat-module",
+  "version": "0.1.0",
+  "description": "Context-aware AI chat responder for Minecraft (Hypixel Skyblock friendly). Reads in-game context from your client, decides when to speak, and replies in chat.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "mcchat": "bin/mcchat.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node bin/mcchat.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  },
+  "keywords": [
+    "minecraft",
+    "hypixel",
+    "skyblock",
+    "chat",
+    "ai",
+    "claude",
+    "chattriggers",
+    "mineflayer"
+  ],
+  "license": "MIT"
+}

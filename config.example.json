@@ -1,0 +1,39 @@
+{
+  "username": "YourIgnHere",
+  "aliases": ["nickname people call you"],
+  "persona": "snarky",
+
+  "llm": {
+    "model": "claude-opus-5",
+    "effort": "low",
+    "timeoutMs": 8000
+  },
+
+  "chat": {
+    "maxLength": 100,
+    "profanity": "clean",
+    "typingDelayMs": [600, 1800],
+    "speakIn": ["all", "party"]
+  },
+
+  "limits": {
+    "globalCooldownMs": 8000,
+    "perPlayerCooldownMs": 60000,
+    "maxPerMinute": 4,
+    "maxPerHour": 30,
+    "maxConsecutivePerPlayer": 2
+  },
+
+  "detect": {
+    "pathfinder": { "threshold": 3, "windowMs": 45000, "radius": 4 },
+    "accusation": { "requireDirected": true },
+    "mention": { "enabled": true, "answerWhispers": true }
+  },
+
+  "ignore": ["YourFriend", "YourAlt"],
+  "shortNames": { "xX_DreamSlayer_Xx": "Dream" },
+
+  "bridge": { "host": "127.0.0.1", "port": 8787, "token": "change-me" },
+
+  "dryRun": false
+}

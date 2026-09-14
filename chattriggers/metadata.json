@@ -1,0 +1,7 @@
+{
+  "name": "MCChatAI",
+  "creator": "you",
+  "version": "0.1.0",
+  "entry": "index.js",
+  "description": "Streams in-game context to a local AI brain and types its replies in chat."
+}
