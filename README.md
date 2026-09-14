@@ -127,6 +127,27 @@ Artifact it writes every reply live through Claude on the viewer's own account,
 including the repeat guard rewriting a line that came back too similar; opened
 as a local file it falls back to the canned lines and says so.
 
+### GitHub Pages sandbox with Gemini
+
+`web/` is ready to publish with GitHub Pages. The page never contains a Gemini
+key: it sends its reply prompt to the small Worker in `cloudflare-worker/`, and
+the Worker makes the Gemini request server-side.
+
+1. In Cloudflare, create a Worker from `cloudflare-worker/` and deploy it. Its
+   entry point is `src/index.js`.
+2. In that Worker's **Settings → Variables and Secrets**, add a **Secret** named
+   `GEMINI_API_KEY`. Optionally add the plaintext `ALLOWED_ORIGIN` variable as
+   your final Pages URL, such as `https://abdyzam50-rgb.github.io`.
+3. Copy the Worker URL (for example `https://minecraft-chat-gemini.<account>.workers.dev`)
+   into `web/config.js` as `window.MCCHAT_API_URL` — this URL is safe to commit.
+4. In GitHub repository **Settings → Pages**, deploy from the `web/` directory.
+   The published root opens the sandbox automatically.
+
+The Worker URL is intentionally public, so keep this deployment for testing
+unless you add Cloudflare Access or another server-side authorization layer.
+`ALLOWED_ORIGIN` prevents other websites' browsers from reading replies, but
+does not authenticate direct requests.
+
 ### Hooking up the client
 
 Copy `chattriggers/` into

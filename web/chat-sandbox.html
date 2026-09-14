@@ -1,4 +1,5 @@
 <title>Hypixel Chat Sandbox</title>
+<script src="./config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -848,6 +849,7 @@
 
   let sampleFn = null;   // resolved claude.use("sample"), or null
   let liveReady = false;
+  const workerApiUrl = String(window.MCCHAT_API_URL || "").replace(/\/$/, "");
 
   function setLive(on, label) {
     liveReady = on;
@@ -857,6 +859,18 @@
   }
 
   (async () => {
+    if (workerApiUrl) {
+      try {
+        const health = await fetch(workerApiUrl + "/health");
+        if (!health.ok) throw new Error("health check failed");
+        setLive(true, "live · Gemini via Worker");
+        return;
+      } catch (error) {
+        setLive(false, "Worker unavailable · canned lines");
+        logEntry("skip", "Gemini Worker could not be reached — falling back to canned lines");
+        return;
+      }
+    }
     try {
       sampleFn = await window.claude?.use("sample");
     } catch (error) {
@@ -947,6 +961,24 @@
   }
 
   async function writeLine(trigger, avoid, rejected) {
+    if (workerApiUrl) {
+      try {
+        const response = await fetch(workerApiUrl + "/api/reply", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prompt: buildPrompt(trigger, avoid, rejected) }),
+        });
+        const reply = await response.json();
+        if (!response.ok) throw new Error(reply.error || "Worker request failed");
+        if (!reply.respond || !reply.message) {
+          return { source: "gemini", message: null, reason: reply.reason || "chose to stay quiet" };
+        }
+        return { source: "gemini", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)), reason: reply.reason };
+      } catch (error) {
+        logEntry("skip", "Gemini Worker failed (" + error.message + ")");
+        return { source: "gemini", message: null, reason: "Worker unavailable" };
+      }
+    }
     if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
     try {
       const reply = await sampleFn.json(buildPrompt(trigger, avoid, rejected), {
