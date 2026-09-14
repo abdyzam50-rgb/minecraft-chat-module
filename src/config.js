@@ -36,8 +36,14 @@ export const DEFAULTS = {
   },
 
   chat: {
-    /** 1.8.x clients cap the chat box at 100 chars. Hypixel allows 256. */
+    /** Hard cap — 1.8.x clients stop accepting input at 100 chars. */
     maxLength: 100,
+    /**
+     * What a reply should actually look like. The cap is a wall, not a target:
+     * players type a handful of words mid-grind, and long tidy sentences are
+     * the giveaway.
+     */
+    preferredLength: 40,
     /**
      * clean  — swap profanity for tamer words before sending
      * allow  — send whatever the model wrote

@@ -447,7 +447,8 @@
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       spot_claim: ["mb, ill move", "oh sorry, all yours", "my bad, ill shift over", "no worries, ill find another spawn", "ah mb, moving now"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
-      mention: ["just grinding ghosts, you?", "grinding ghosts in the mist, what's up"],
+      opener: ["yh?", "?", "sup", "whats up"],
+      mention: ["just grinding ghosts", "ghosts in the mist", "grinding ghosts, you?"],
     },
     snarky: {
       shouts: true,
@@ -463,7 +464,8 @@
       ],
       spot_claim: ["mb ill move", "fair enough, ill shift", "all yours", "aight, moving", "yeah fair, ill go elsewhere"],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
-      mention: ["just grinding ghosts, same as yesterday", "grinding ghosts. you?"],
+      opener: ["?", "yh?", "what", "wha"],
+      mention: ["just grinding ghosts", "ghosts, same as ever", "grinding ghosts. you?"],
     },
     unfiltered: {
       shouts: true,
@@ -479,7 +481,8 @@
       ],
       spot_claim: ["mb ill move", "aight fair, moving", "yeah alright, all yours", "fine, ill shift over", "my bad, going"],
       hostile: ["piss off, it's a public lobby", "get lost"],
-      mention: ["just grinding ghosts mate", "grinding ghosts, what do you want"],
+      opener: ["?", "what", "wha", "yh"],
+      mention: ["just grinding ghosts mate", "grinding ghosts", "ghosts, what else"],
     },
   };
 
@@ -527,6 +530,7 @@
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
+  const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|oi+|psst|a+y+o*|heya|hiya)?[\s!?.,]*$/i;
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
   const DETECT = {
@@ -794,7 +798,9 @@
       "They are grinding Ghosts in the Mist in the Dwarven Mines with a pathing macro, so they cannot stop to type. You type for them.",
       "The Mist is the most macro-accused grind in the game, so other players constantly run their own macro checks: they stand in your face or ask you to prove you are real, to see whether you react like a person.",
       "",
-      "Write ONE line of Minecraft chat, at most 100 characters, lowercase, clipped, typed mid-grind.",
+      "Write ONE line of Minecraft chat. Short — a handful of words, around 40 characters, 100 absolute max. Lowercase, clipped, typos fine.",
+      "A full tidy sentence is the giveaway. Sometimes the whole reply is one word, or one character.",
+      "Mostly leave names out: in a back-and-forth they know you are talking to them, and tacking their name onto every line is the clearest sign something automated is typing.",
       "Persona: " + persona + ".",
       "Tone right now: " + tone + ".",
       (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
@@ -806,6 +812,9 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.opener
+        ? 'They have just called your name and said nothing else. Answer the way a player does: one or two characters. "?", "yh?", "what", "wha", "sup". Nothing longer, and do not tell them what you are doing until they ask.'
+        : "",
       trigger.kind === "spot_claim"
         ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
         : "",
@@ -863,9 +872,10 @@
   /* ---------- the pipeline ---------- */
 
   function fallbackLine(trigger) {
-    const entry = PERSONAS[state.persona][trigger.kind] || PERSONAS[state.persona].mention;
+    const kind = trigger.opener && PERSONAS[state.persona].opener ? "opener" : trigger.kind;
+    const entry = PERSONAS[state.persona][kind] || PERSONAS[state.persona].mention;
     const lines = Array.isArray(entry) ? entry : entry[trigger.anger || 1];
-    const key = trigger.kind + ":" + (trigger.anger || 1);
+    const key = kind + ":" + (trigger.anger || 1);
     const index = state.rotation[key] || 0;
     state.rotation[key] = index + 1;
     return lines[index % lines.length].replace("{short}", shortName(trigger.subject || ""));
@@ -994,9 +1004,15 @@
     const open = state.convo[player.name];
     const continuing = !named && open && (ts - open.lastTurn) <= CONVO.windowMs && nearby;
     if (named || continuing) {
+      // Strip our name and see whether anything was actually said. "yo 3172"
+      // wants "?" back, not a sentence about ghost drops.
+      const remainder = text.replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
+      const opener = GREETING_ONLY.test(remainder);
       return respond({
-        kind: "mention", subject: player.name, channel, conversational: true,
-        evidence: shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
+        kind: "mention", subject: player.name, channel, conversational: true, opener: opener,
+        evidence: opener
+          ? shortName(player.name) + " just called my name, nothing else in it"
+          : shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
       });
     }
 
@@ -1116,6 +1132,7 @@
     "macro check, say something if ur real",
     "u real?",
     "ur macroing arent you",
+    "yo 3172",
     "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",

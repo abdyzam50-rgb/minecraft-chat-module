@@ -54,7 +54,8 @@ test('the prompt carries the short name and the blocking history', async () => {
   for (const event of griefScript()) await ai.handle(event);
 
   const userPrompt = capture.params.messages[0].content;
-  assert.match(userPrompt, /Call them "Dream"/);
+  assert.match(userPrompt, /they go by "Dream"/);
+  assert.match(userPrompt, /you usually do not need to/, 'and is told not to lean on it');
   assert.match(userPrompt, /blocked my path 3x/);
   assert.match(capture.params.system[0].text, /Technoblade/);
   assert.equal(capture.params.system[0].cache_control.type, 'ephemeral');
@@ -403,8 +404,8 @@ test('no persona answers a question with a one-word grunt', async () => {
     await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
 
     assert.equal(said.length, 1, `${persona} should answer`);
-    assert.match(said[0].message, /grinding/, `${persona} should say what it is doing, got "${said[0].message}"`);
-    assert.ok(said[0].message.split(/\s+/).length >= 3, `${persona} gave a grunt: "${said[0].message}"`);
+    assert.match(said[0].message, /grind|ghost/, `${persona} should say what it is doing, got "${said[0].message}"`);
+    assert.ok(said[0].message.split(/\s+/).length >= 2, `${persona} gave a grunt: "${said[0].message}"`);
   }
 });
 
@@ -551,4 +552,67 @@ test('we still do not nag someone who never spoke to us', async () => {
   }
   // The pathfinder callout is ours, not theirs — the global cooldown still holds.
   assert.ok(skipped.some((r) => /global cooldown/.test(r)), skipped.join(' | '));
+});
+
+test('a bare call-out gets a one-word reply, not a life story', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'yh?', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: Yo 3172' });
+
+  assert.equal(said.length, 1);
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /just called my name/);
+  assert.match(prompt, /one or two characters/);
+});
+
+test('an actual question is not treated as a bare call-out', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'ghosts in the mist', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: yo 3172 what you upto' });
+
+  assert.doesNotMatch(capture.params.messages[0].content, /one or two characters/);
+});
+
+test('it is told to stop using their name once it has twice running', async () => {
+  const prompts = [];
+  let call = 0;
+  // Every reply name-drops them, which is the habit we want caught.
+  const lines = ['ghosting in mist dream', 'lost count dream, been ages', 'about 40m dream'];
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create(params) {
+          prompts.push(params.messages[0].content);
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: lines[call++ % lines.length], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  for (const line of ['yo 3172 hows it going', 'how many hours you been at this', 'how many coins so far']) {
+    await ai.handle({ type: 'chat', raw: `[MVP+] xX_DreamSlayer_Xx: ${line}` });
+    clock += 6000;
+  }
+
+  assert.doesNotMatch(prompts[0], /starting to read as a script/);
+  assert.doesNotMatch(prompts[1], /starting to read as a script/);
+  assert.match(prompts[2], /Do not use it again/, 'after two name-drops in a row it is told to stop');
 });

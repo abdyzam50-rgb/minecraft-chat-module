@@ -72,6 +72,12 @@ export const HOSTILE_NUDGE = new RegExp(
   'i',
 );
 
+/**
+ * A greeting with nothing else in it. "yo 3172" is not a question — it wants
+ * "?" or "yh?" back, not a sentence about ghost drops.
+ */
+export const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|hell+o+|sup|wsup|oi+|psst|a+y+o*|heya|hiya|yo+)?[\s!?.,]*$/i;
+
 /** A question aimed at us. */
 export function looksLikeQuestion(text) {
   return /\?\s*$/.test(text) || /^(what|why|how|who|where|when|are|is|do|does|can|u\s|you\s)/i.test(text);

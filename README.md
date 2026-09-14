@@ -195,6 +195,29 @@ the context and the avoid-list rather than sampling noise, which is the more
 reliable source anyway. Effort defaults to `medium`; `low` produces noticeably
 more formulaic phrasing.
 
+### Length, names, and one-word replies
+
+Three habits that give a bot away faster than wrong wording:
+
+**Long tidy sentences.** Nobody types those with a macro running and a ghost on
+them. `chat.preferredLength` (40 chars) is what the model aims at;
+`chat.maxLength` (100) is the wall, not the target.
+
+**Saying their name every line.** "ghosting in mist dream", "lost count dream",
+"about 40m dream" — four for four is unmistakably automated. The prompt now says
+to mostly leave names out, and if the last two replies to someone both used
+their short name, the next request explicitly tells the model to drop it.
+
+**Answering a greeting with a paragraph.** "yo 3172" isn't a question. A mention
+that's only your name plus a greeting is flagged `opener`, and the reply is one
+or two characters — `?`, `yh?`, `what`, `wha`, `sup`. It doesn't volunteer what
+it's doing until asked.
+
+```
+Dream: Yo 3172                    ->  ?
+Dream: yo 3172 what you upto      ->  just grinding ghosts
+```
+
 ### Typing like a person
 
 Delay is modelled, not a flat random pause: a beat to read and decide
@@ -373,7 +396,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-78 tests over name shortening, chat parsing, detector thresholds, the macro-check
+81 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
-typing model, conversation continuity and turn budgets, the rate limiter, sanitisation, the bridge, and the full
+typing model, conversation continuity and turn budgets, one-word openers, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

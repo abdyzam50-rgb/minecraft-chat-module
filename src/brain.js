@@ -8,6 +8,7 @@ import { ClaudeResponder } from './llm/claude.js';
 import { FallbackResponder } from './llm/fallback.js';
 import { detectFromChat, detectPathfinderBlock, detectMuted } from './detect/index.js';
 import { getPersona } from './persona/personas.js';
+import { shortName } from './chat/shortname.js';
 
 /**
  * The brain: feed it game events, it emits chat messages to send.
@@ -121,9 +122,10 @@ export class ChatAI extends EventEmitter {
 
     const avoid = this.policy.recent(this.config.limits.dedupeWindowMs)
       .slice(0, this.config.chat.avoidHistory);
+    const nameFatigue = this.nameFatigue(trigger);
     const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
 
-    let decision = await this.think(trigger, ts, { avoid });
+    let decision = await this.think(trigger, ts, { avoid, nameFatigue });
     if (!decision) return null;
 
     if (!decision.respond || !decision.message) {
@@ -143,7 +145,7 @@ export class ChatAI extends EventEmitter {
     // the rejected line in front of it before giving up and saying nothing.
     if (!final.allowed && final.repeat && this.config.llm.retryOnRepeat && this.usingApi) {
       this.emit('skip', { trigger, reason: `${final.reason} — rewriting` });
-      const retry = await this.think(trigger, ts, { avoid, rejected: clean.message });
+      const retry = await this.think(trigger, ts, { avoid, nameFatigue, rejected: clean.message });
       if (retry?.respond && retry.message) {
         const retryClean = sanitize(retry.message, this.config, { shout });
         if (retryClean.ok) {
@@ -192,6 +194,21 @@ export class ChatAI extends EventEmitter {
     this.outbox.push(action);
     this.emit('say', action);
     return action;
+  }
+
+  /**
+   * Have we used this player's name in the last couple of things we said to
+   * them? Addressing someone by name every single line is the clearest tell
+   * that a script is typing.
+   */
+  nameFatigue(trigger) {
+    if (!trigger.subject) return false;
+    const short = shortName(trigger.subject, { overrides: this.config.shortNames }).toLowerCase();
+    if (!short) return false;
+    const recent = this.policy.sent
+      .filter((entry) => entry.subject === trigger.subject)
+      .slice(-2);
+    return recent.length >= 2 && recent.every((entry) => entry.message.toLowerCase().includes(short));
   }
 
   /**

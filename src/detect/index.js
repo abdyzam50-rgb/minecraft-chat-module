@@ -2,6 +2,7 @@ import { mentions, shortName } from '../chat/shortname.js';
 import {
   ACCUSATION,
   AGGRESSIVE,
+  GREETING_ONLY,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
   MUTE_NOTICE,
@@ -235,14 +236,25 @@ export function detectMention(store, config, message, ts = Date.now()) {
   if (!named && !continuing && !(isWhisper && config.detect.mention.answerWhispers)) return null;
   if (!isWhisper && !looksLikeQuestion(message.content) && message.content.length < 4) return null;
 
+  // Strip our name out and see whether anything was actually said.
+  const remainder = [config.username, shortName(config.username), ...config.aliases]
+    .filter(Boolean)
+    .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), message.content)
+    .replace(/\s+/g, ' ')
+    .trim();
+  const opener = GREETING_ONLY.test(remainder);
+
   return {
     kind: isWhisper ? 'whisper' : 'mention',
     subject: message.sender,
     severity: 1,
     conversational: true,
-    evidence: `${message.sender} ${isWhisper ? 'whispered' : 'said'} "${message.content}"${
-      named ? ` and used my name (${shortName(config.username)})` : ''
-    }${continuing ? ', carrying on the conversation we are already having' : ''}.`,
+    opener,
+    evidence: opener
+      ? `${message.sender} just called my name — "${message.content}" — nothing else in it.`
+      : `${message.sender} ${isWhisper ? 'whispered' : 'said'} "${message.content}"${
+          named ? ` and used my name (${shortName(config.username)})` : ''
+        }${continuing ? ', carrying on the conversation we are already having' : ''}.`,
     channel: isWhisper ? 'whisper' : message.channel,
   };
 }
