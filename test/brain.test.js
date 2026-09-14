@@ -928,5 +928,53 @@ test('it is told the mist is a place, not a mob', async () => {
 
   const system = capture.params.system[0].text;
   assert.match(system, /"grinding ghosts"/);
-  assert.match(system, /not something anyone says/);
+  assert.match(system, /The Mist is only ever a location/);
+});
+
+test('being called rich is read as a compliment, not a charge', async () => {
+  const capture = {};
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: mockClient({ respond: true, message: 'yh made a bit ngl', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 you seem rich' });
+
+  assert.equal(said.length, 1);
+  assert.equal(said[0].trigger, 'mention', 'not an accusation');
+  const system = capture.params.system[0].text;
+  assert.match(system, /Being called rich is a compliment/);
+  assert.match(system, /nothing to be cagey about/);
+  assert.doesNotMatch(capture.params.messages[0].content, /Do not admit to anything/);
+});
+
+test('an actual accusation still gets the cagey handling', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'not macroing', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 u macroing' });
+
+  assert.match(capture.params.messages[0].content, /Do not admit to anything/);
+});
+
+test('the grind is named positively, without the wrong phrase in the prompt', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'grinding ghosts', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 wyd' });
+
+  const system = capture.params.system[0].text;
+  assert.match(system, /The phrase for what you are doing is "grinding ghosts"/);
+  assert.doesNotMatch(system, /grinding mist/i, 'naming the bad phrase is what kept producing it');
 });

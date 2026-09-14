@@ -51,6 +51,15 @@ export const DEFAULTS = {
      */
     terseWords: 2,
     /**
+     * Phrasings to fix on the way out. Telling the model not to say something
+     * puts the words in front of it; correcting the output is reliable.
+     * [pattern, replacement] — patterns are matched case-insensitively.
+     */
+    corrections: [
+      ['\\b(grind|grinding|farm|farming|doing)\\s+(?:the\\s+)?mist\\b', '$1 ghosts'],
+      ['\\bkill(ing)?\\s+(?:the\\s+)?mist\\b', 'killing ghosts'],
+    ],
+    /**
      * clean  — swap profanity for tamer words before sending
      * allow  — send whatever the model wrote
      * Note: no filter-evasion (l3etspeak) is performed in either mode.

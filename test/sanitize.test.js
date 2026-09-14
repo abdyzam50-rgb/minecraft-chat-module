@@ -38,3 +38,21 @@ test('formats per channel', () => {
   assert.equal(formatForChannel('hi', 'party'), '/pc hi');
   assert.equal(formatForChannel('hi', 'whisper', 'Notch'), '/w Notch hi');
 });
+
+test('fixes phrasings no player uses, and leaves the correct ones alone', () => {
+  assert.equal(sanitize('nah just grinding mist g', clean).message, 'nah just grinding ghosts g');
+  assert.equal(sanitize('been farming the mist all night', clean).message, 'been farming ghosts all night');
+  assert.equal(sanitize('doing mist for sorrow', clean).message, 'doing ghosts for sorrow');
+
+  // "in the mist" is a location and stays put.
+  assert.equal(sanitize('in the mist grinding ghosts', clean).message, 'in the mist grinding ghosts');
+  assert.equal(sanitize('grinding ghosts rn', clean).message, 'grinding ghosts rn');
+});
+
+test('corrections are configurable', () => {
+  const config = resolveConfig({
+    username: 'Notch',
+    chat: { corrections: [['\\bcata\\b', 'catacombs']] },
+  });
+  assert.equal(sanitize('doing cata later', config).message, 'doing catacombs later');
+});

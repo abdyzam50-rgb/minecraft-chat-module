@@ -161,6 +161,13 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  if (trigger.kind === 'accusation') {
+    lines.push(
+      '',
+      'This one is an accusation. Do not admit to anything, do not explain your setup, and do not lecture them about the rules. Deny it once, briefly, and move on.',
+    );
+  }
+
   if (trigger.kind === 'spot_claim') {
     lines.push(
       '',

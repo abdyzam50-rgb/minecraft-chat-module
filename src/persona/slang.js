@@ -66,7 +66,7 @@ export const SKYBLOCK_TERMS = [
   ['ch', 'crystal hollows'],
   ['div', "divan's gear"],
   ['scatha', 'rare worm in the crystal hollows'],
-  ['the mist', 'the ghost area of the dwarven mines — a place, not a mob: you grind ghosts IN the mist, you never "grind mist"'],
+  ['the mist', 'the ghost area of the dwarven mines — a location: you are "in the mist", and what you kill there is ghosts'],
   ['sorrow / volta / plasma / ghostly boots', 'the ghost drops'],
   ['cata', 'catacombs'],
   ['f1-f7 / m1-m7', 'catacombs floors, normal and master mode'],

@@ -62,6 +62,10 @@ export function sanitize(raw, config, options = {}) {
   text = text.replace(/[^ -~¡-ÿ]/g, '').replace(/\s{2,}/g, ' ').trim();
   if (!text) return { ok: false, message: '', reason: 'no sendable characters' };
 
+  for (const [pattern, replacement] of config.chat.corrections ?? []) {
+    text = text.replace(new RegExp(pattern, 'gi'), replacement);
+  }
+
   if (options.stripNames?.length) {
     for (const name of options.stripNames) {
       if (!name || name.length < 2) continue;

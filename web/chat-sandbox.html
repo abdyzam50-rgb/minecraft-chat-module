@@ -600,6 +600,13 @@
 
   /* ---------- sanitise (src/chat/sanitize.js) ---------- */
 
+  // Telling a model not to say something puts the words in front of it.
+  // Correcting the output is the reliable half.
+  const CORRECTIONS = [
+    [/\b(grind|grinding|farm|farming|doing)\s+(?:the\s+)?mist\b/gi, "$1 ghosts"],
+    [/\bkill(ing)?\s+(?:the\s+)?mist\b/gi, "killing ghosts"],
+  ];
+
   const SOFTEN = [
     [/\bfuck(?:ing|ed|er|s)?\b/gi, "freaking"], [/\bshit(?:ty|s)?\b/gi, "rubbish"],
     [/\bbitch(?:es)?\b/gi, "clown"], [/\bdip\s?shit\b/gi, "genius"],
@@ -611,6 +618,7 @@
     let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
     if (!text) return null;
     if (/https?:\/\/|discord\.gg\//i.test(text)) return null;
+    for (const [p, r] of CORRECTIONS) text = text.replace(p, r);
     if (state.profanity === "clean") for (const [p, r] of SOFTEN) text = text.replace(p, r);
     if (terse) {
       // A call-out or an acknowledgement gets two words and no name, enforced.
@@ -866,7 +874,8 @@
     return [
       "You are the chat voice of a Minecraft player called 3172 on Hypixel SkyBlock.",
       "They are grinding Ghosts in the Mist in the Dwarven Mines with a pathing macro, so they cannot stop to type. You type for them.",
-      "Say it the way players do: \"grinding ghosts\" or \"doing ghosts\". The Mist is the place, not the mob — nobody says \"grinding mist\", and saying it marks you out immediately. \"in the mist\" is fine as a location.",
+      "The phrase for what you are doing is \"grinding ghosts\", or \"doing ghosts\". The Mist is only ever a location: you are \"in the mist\". Ghosts are what you kill; the mist is where you stand.",
+      "Ghost grinding pays well and everyone knows it. Being called rich is a compliment here, not an accusation — take it. Coins, drops and how long you have been at it are ordinary small talk, nothing to be cagey about.",
       "The Mist is the most macro-accused grind in the game, so other players constantly run their own macro checks: they stand in your face or ask you to prove you are real, to see whether you react like a person.",
       "",
       "Write ONE line of Minecraft chat. Short — a handful of words, around 40 characters, 100 absolute max. Lowercase, clipped, typos fine.",
@@ -895,6 +904,9 @@
         : "",
       trigger.opener
         ? 'They have just called your name and said nothing else. Answer the way a player does: one or two characters. "?", "yh?", "what", "wha", "sup". Nothing longer, and do not tell them what you are doing until they ask.'
+        : "",
+      trigger.kind === "accusation"
+        ? "This one is an accusation. Do not admit to anything, do not explain your setup, do not lecture them about the rules. Deny it once, briefly, and move on."
         : "",
       trigger.kind === "spot_claim"
         ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
@@ -1235,6 +1247,7 @@
     "mb g",
     "3172 got any gronk stacks",
     "most people macro that tho",
+    "3172 you seem rich",
     "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",

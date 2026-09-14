@@ -229,10 +229,33 @@ Dream: cool cool                  ->  (nothing)
 
 ### Saying it the way players say it
 
-The Mist is a place; ghosts are the mob. You grind *ghosts*, in the Mist —
-"grinding mist" is not something anyone says, and saying it marks you out
-instantly. That's in the grind context and in the glossary, because getting the
-local noun wrong undoes every other bit of camouflage.
+The Mist is a place; ghosts are the mob. You grind *ghosts*, and you are *in*
+the mist. Getting the local noun wrong undoes every other bit of camouflage.
+
+The first attempt at this was a prompt rule that quoted the wrong phrase in
+order to ban it — which put the words in front of the model and it produced
+them anyway, twice. So it's now stated positively, with the wrong phrasing
+appearing nowhere in the prompt, **and** corrected on the way out:
+
+```js
+chat.corrections: [
+  ['\\b(grind|grinding|farm|farming|doing)\\s+(?:the\\s+)?mist\\b', '$1 ghosts'],
+]
+```
+
+"grinding mist" becomes "grinding ghosts"; "in the mist" is a location and is
+left alone. Add your own pairs for any phrasing your server words differently.
+
+### Nothing to be cagey about
+
+Ghost grinding pays well and everyone knows it, so "you seem rich" is a
+compliment — it gets taken, not deflected. Coins, drops and how long you've been
+at it are ordinary small talk.
+
+That needed a fix because the instruction *"you do not admit to anything"* was
+sitting in the global context and colouring every reply, so the bot was evasive
+about things nobody was accusing it of. It now applies only to `accusation`
+triggers, where it belongs: deny once, briefly, move on.
 
 ### Slang
 
@@ -506,7 +529,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-104 tests over name shortening, chat parsing, detector thresholds, the macro-check
+109 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.
