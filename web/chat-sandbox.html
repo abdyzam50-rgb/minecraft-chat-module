@@ -1,0 +1,844 @@
+<title>Hypixel Chat Sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --stone-0: #f2f0ec;
+    --stone-1: #e7e4dd;
+    --stone-2: #d8d4ca;
+    --ink: #22242a;
+    --ink-soft: #5c6068;
+    --ink-faint: #8b8f98;
+    --lapis: #3a5ba0;
+    --lapis-soft: #e3e9f6;
+    --rule: #cfcbc1;
+    --panel: #ffffff;
+    --good: #2f7d4f;
+    --warn: #9a6a12;
+    --stop: #a33c3c;
+
+    --mc-white: #ffffff;
+    --mc-gray: #aaaaaa;
+    --mc-dgray: #555555;
+    --mc-aqua: #55ffff;
+    --mc-green: #55ff55;
+    --mc-red: #ff5555;
+    --mc-gold: #ffaa00;
+    --mc-yellow: #ffff55;
+    --mc-blue: #5555ff;
+    --mc-pink: #ff55ff;
+
+    --hud-ground: #1d2026;
+    --hud-panel: rgba(0, 0, 0, 0.55);
+
+    --font-game: "Pixelify Sans", "Trebuchet MS", monospace;
+    --font-code: "IBM Plex Mono", ui-monospace, monospace;
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --stone-0: #16181c;
+      --stone-1: #1d2025;
+      --stone-2: #262a31;
+      --ink: #e8e6e1;
+      --ink-soft: #a5a9b2;
+      --ink-faint: #757a84;
+      --lapis: #7ba3ee;
+      --lapis-soft: #1f2a3f;
+      --rule: #32363e;
+      --panel: #1a1d22;
+      --good: #6fc48d;
+      --warn: #d8a83f;
+      --stop: #e4776f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --stone-0: #16181c;
+    --stone-1: #1d2025;
+    --stone-2: #262a31;
+    --ink: #e8e6e1;
+    --ink-soft: #a5a9b2;
+    --ink-faint: #757a84;
+    --lapis: #7ba3ee;
+    --lapis-soft: #1f2a3f;
+    --rule: #32363e;
+    --panel: #1a1d22;
+    --good: #6fc48d;
+    --warn: #d8a83f;
+    --stop: #e4776f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--stone-0);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    line-height: 1.5;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 28px 44px;
+  }
+
+  header { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-end; justify-content: space-between; }
+
+  h1 {
+    font-family: var(--font-game);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .tagline { margin: 6px 0 0; color: var(--ink-soft); max-width: 58ch; font-size: 14px; }
+  .tagline code { font-family: var(--font-code); font-size: 12.5px; color: var(--ink); }
+
+  .settings { display: flex; gap: 18px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--ink-faint); font-weight: 600;
+  }
+  select, input[type="text"] {
+    font-family: var(--font-ui); font-size: 13px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 6px 8px;
+  }
+  select:focus-visible, input:focus-visible, button:focus-visible {
+    outline: 2px solid var(--lapis); outline-offset: 1px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 20px;
+    margin-top: 26px;
+    align-items: start;
+  }
+
+  /* ---------- the game window ---------- */
+
+  .game {
+    background:
+      radial-gradient(120% 90% at 50% 0%, #2b3039 0%, #14171c 70%),
+      var(--hud-ground);
+    border: 1px solid #0b0d10;
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  }
+
+  .hud { display: flex; flex-direction: column; min-height: 470px; }
+
+  .hud-top {
+    display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between;
+    padding: 10px 12px;
+    font-family: var(--font-game); font-size: 14px; color: var(--mc-gray);
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+  }
+  .hud-top .area { color: var(--mc-aqua); }
+  .path-state { display: flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 0; background: var(--mc-green); }
+  .dot.blocked { background: var(--mc-red); }
+  .dot.idle { background: var(--mc-dgray); }
+
+  .chat-log {
+    flex: 1;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    gap: 2px;
+    margin: 0 10px;
+    padding: 10px;
+    background: var(--hud-panel);
+    font-family: var(--font-game);
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--mc-white);
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.75);
+    height: 330px;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+  }
+  .chat-log::-webkit-scrollbar { width: 6px; }
+  .chat-log::-webkit-scrollbar-thumb { background: #ffffff33; }
+
+  .line { animation: appear 140ms ease-out; }
+  @keyframes appear { from { opacity: 0.4; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .line { animation: none; } }
+
+  .line.ours { background: rgba(85, 255, 255, 0.07); margin-inline: -4px; padding-inline: 4px; }
+
+  .g-gray { color: var(--mc-gray); }
+  .g-dgray { color: var(--mc-dgray); }
+  .g-aqua { color: var(--mc-aqua); }
+  .g-green { color: var(--mc-green); }
+  .g-red { color: var(--mc-red); }
+  .g-gold { color: var(--mc-gold); }
+  .g-yellow { color: var(--mc-yellow); }
+  .g-blue { color: #8888ff; }
+  .g-pink { color: var(--mc-pink); }
+
+  .chat-bar {
+    display: flex; gap: 8px; align-items: center;
+    margin: 10px; padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.62);
+    border: 1px solid #ffffff1f;
+  }
+  .chat-bar select {
+    font-family: var(--font-game); font-size: 14px;
+    background: #00000066; color: var(--mc-yellow); border: 1px solid #ffffff1f;
+    max-width: 44%;
+  }
+  .chat-bar input {
+    flex: 1; min-width: 0;
+    font-family: var(--font-game); font-size: 15px;
+    background: transparent; color: var(--mc-white); border: 0; padding: 4px 2px;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.75);
+  }
+  .chat-bar input::placeholder { color: #ffffff4d; }
+  .chat-bar button {
+    font-family: var(--font-game); font-size: 14px;
+    background: #ffffff14; color: var(--mc-white);
+    border: 1px solid #ffffff33; padding: 5px 12px; cursor: pointer;
+  }
+  .chat-bar button:hover { background: #ffffff26; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 10px 12px; }
+  .presets button {
+    font-family: var(--font-game); font-size: 13px;
+    background: #ffffff0f; color: var(--mc-gray);
+    border: 1px solid #ffffff1a; padding: 4px 9px; cursor: pointer;
+  }
+  .presets button:hover { background: #ffffff1f; color: var(--mc-white); }
+
+  /* ---------- the brain panel ---------- */
+
+  .brain { display: flex; flex-direction: column; gap: 16px; }
+
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+  .card > h2 {
+    margin: 0; padding: 11px 14px;
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-faint); font-weight: 600;
+    border-bottom: 1px solid var(--rule);
+  }
+  .card-body { padding: 12px 14px; }
+
+  .roster { display: flex; flex-direction: column; gap: 9px; }
+  .roster-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+  .roster-name { font-family: var(--font-code); font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
+  .roster-meta { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .roster-row button {
+    font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
+    white-space: nowrap;
+    background: var(--lapis-soft); color: var(--lapis);
+    border: 1px solid transparent; border-radius: 3px; padding: 5px 9px; cursor: pointer;
+  }
+  .roster-row button:hover { border-color: var(--lapis); }
+
+  .meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .meter { display: flex; flex-direction: column; gap: 2px; }
+  .meter b {
+    font-family: var(--font-code); font-size: 17px; font-weight: 500;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .meter span { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.07em; }
+  .meter.hot b { color: var(--stop); }
+
+  .log {
+    display: flex; flex-direction: column-reverse; gap: 0;
+    font-family: var(--font-code); font-size: 12px;
+    height: 250px; overflow-y: auto;
+    padding: 4px 0;
+  }
+  .log-row {
+    display: grid; grid-template-columns: 52px 62px minmax(0, 1fr);
+    gap: 8px; padding: 6px 14px;
+    border-top: 1px solid var(--rule);
+  }
+  .log-row:last-child { border-top: 0; }
+  .log-time { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .log-kind { font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; padding-top: 2px; }
+  .log-kind.say { color: var(--good); }
+  .log-kind.trigger { color: var(--warn); }
+  .log-kind.skip { color: var(--ink-faint); }
+  .log-kind.limit { color: var(--stop); }
+  .log-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+  .log-text em { color: var(--ink); font-style: normal; }
+
+  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ghost {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 6px 10px; cursor: pointer;
+  }
+  .ghost:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+  footer {
+    margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--rule);
+    color: var(--ink-faint); font-size: 12.5px; max-width: 70ch;
+  }
+  footer code { font-family: var(--font-code); color: var(--ink-soft); }
+
+  @media (max-width: 820px) {
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .chat-log { height: 260px; }
+    .log { height: 200px; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Hypixel Chat Sandbox</h1>
+      <p class="tagline">
+        Provoke the bot without logging in. Talk as another player, walk in front of the
+        pathfinder, and watch every decision <code>3172</code> makes — including the ones
+        where it deliberately says nothing.
+      </p>
+    </div>
+    <div class="settings">
+      <div class="field">
+        <label for="persona">Persona</label>
+        <select id="persona">
+          <option value="chill">chill</option>
+          <option value="snarky" selected>snarky</option>
+          <option value="unfiltered">unfiltered</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="profanity">Profanity</label>
+        <select id="profanity">
+          <option value="clean" selected>clean</option>
+          <option value="allow">allow</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="channel">Channel</label>
+        <select id="channel">
+          <option value="all" selected>all chat</option>
+          <option value="party">party</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="split">
+    <section class="game" aria-label="Minecraft window">
+      <div class="hud">
+        <div class="hud-top">
+          <span class="area">⛏ Dwarven Mines — mining mithril</span>
+          <span class="path-state">
+            <span class="dot" id="pathDot"></span>
+            <span id="pathText">pathfinder: running</span>
+          </span>
+        </div>
+
+        <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-label="Game chat"></div>
+
+        <div class="chat-bar">
+          <label class="sr-only" for="speaker" hidden>Speaking as</label>
+          <select id="speaker" aria-label="Speaking as"></select>
+          <input id="chatInput" type="text" placeholder="say something to 3172…" autocomplete="off">
+          <button id="sendBtn" type="button">Send</button>
+        </div>
+
+        <div class="presets" id="presets"></div>
+      </div>
+    </section>
+
+    <aside class="brain">
+      <section class="card">
+        <h2>Players nearby</h2>
+        <div class="card-body roster" id="roster"></div>
+      </section>
+
+      <section class="card">
+        <h2>Rate limiter</h2>
+        <div class="card-body">
+          <div class="meters">
+            <div class="meter" id="meterCooldown"><b>—</b><span>next reply</span></div>
+            <div class="meter" id="meterMinute"><b>0/4</b><span>this minute</span></div>
+            <div class="meter" id="meterStreak"><b>0/2</b><span>same player</span></div>
+          </div>
+          <div class="row-actions" style="margin-top: 14px;">
+            <button class="ghost" id="skipCooldown" type="button">Skip cooldowns</button>
+            <button class="ghost" id="resetBtn" type="button">Reset session</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Decision log</h2>
+        <div class="log" id="log"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    Replies here come from the module's built-in offline lines — the same ones it falls back to
+    when <code>ANTHROPIC_API_KEY</code> is unset or the API times out mid-grind. Detection,
+    name shortening, sanitising and the rate limiter are the real logic from
+    <code>src/</code>, so the silences are accurate even though the wording is canned.
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const SELF = "3172";
+
+  /* ---------- roster ---------- */
+
+  const PLAYERS = [
+    { name: "xX_DreamSlayer_Xx", rank: "MVP+", level: 214, distance: 1.8 },
+    { name: "SkyGrinder_", rank: "MVP++", level: 331, distance: 6.4 },
+    { name: "BlockBuddy", rank: "VIP", level: 98, distance: 12.1 },
+    { name: "Nova_77", rank: null, level: 41, distance: 24.6 },
+  ];
+
+  const RANKS = {
+    "VIP": '<span class="g-green">[VIP]</span>',
+    "MVP+": '<span class="g-aqua">[MVP<span class="g-red">+</span>]</span>',
+    "MVP++": '<span class="g-gold">[MVP<span class="g-aqua">++</span>]</span>',
+  };
+
+  /* ---------- personas (src/persona/personas.js) ---------- */
+
+  const PERSONAS = {
+    chill: {
+      pathfinder_blocked: ["{short} you keep walking into my path, mind moving?", "{short} could you give me a bit of room?"],
+      accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
+      hostile: ["all good, i'll path around you", "no problem, moving on"],
+      mention: ["yeah?", "what's up"],
+    },
+    snarky: {
+      pathfinder_blocked: [
+        "{short} standing in my path isn't a personality, move",
+        "{short} third time now. thrilling. move.",
+        "{short} you can walk literally anywhere else",
+      ],
+      accusation: [
+        "not macroing, you've just never seen someone play for more than 10 minutes",
+        "report me then, i'll wait",
+        "imagine calling consistency a hack",
+      ],
+      hostile: ["it's a public lobby, genius", "i was here first but sure"],
+      mention: ["what", "yeah?"],
+    },
+    unfiltered: {
+      pathfinder_blocked: [
+        "{short} get the hell out of my path",
+        "{short} move. seriously. every damn time.",
+        "{short} i swear if you step in front of me one more time",
+      ],
+      accusation: [
+        "i'm not cheating you muppet, go touch grass",
+        "not macroing, you're just bad at this game",
+        "report me then, dipshit",
+      ],
+      hostile: ["piss off, it's a public lobby", "get lost"],
+      mention: ["what do you want", "what"],
+    },
+  };
+
+  /* ---------- shortName + mentions (src/chat/shortname.js) ---------- */
+
+  const FILLER = new Set(["the","mr","its","im","yt","ttv","lol","xd","god","king","lord","pro","noob","gamer","player","official","real","mc"]);
+
+  function shortName(username, maxLength = 8) {
+    const name = String(username || "").trim();
+    if (!name) return "";
+    if (name.length <= maxLength && /^[A-Za-z]+$/.test(name)) return name;
+
+    const stripped = name.replace(/^(?:xX|Xx|_+|-+)|(?:xX|Xx|_+|-+)$/g, "");
+    const tokens = stripped.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[^A-Za-z]+/).filter(Boolean);
+    if (!tokens.length) return name.slice(0, maxLength);
+
+    const meaningful = tokens.filter((t) => t.length >= 3 && !FILLER.has(t.toLowerCase()));
+    const pool = meaningful.length ? meaningful : tokens;
+    let pick = pool.find((t) => t.length >= 4) || pool[0];
+    if (pick.length > maxLength) {
+      pick = pick.slice(0, maxLength);
+      while (pick.length > 5 && !/[aeiouy]$/i.test(pick)) pick = pick.slice(0, -1);
+    }
+    if (pick.length < 3) return name;
+    return pick.charAt(0).toUpperCase() + pick.slice(1);
+  }
+
+  function mentions(text, username) {
+    const haystack = String(text || "").toLowerCase();
+    const needles = [username, shortName(username)].map((n) => String(n).toLowerCase());
+    for (const needle of needles) {
+      if (needle.length < 3) continue;
+      const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp("(^|[^a-z0-9_])" + escaped + "([^a-z0-9_]|$)", "i").test(haystack)) return true;
+    }
+    const full = String(username).toLowerCase();
+    if (full.length < 5) return false;
+    return haystack.split(/[^a-z0-9_]+/).some((w) => w.length >= 4 && full.startsWith(w));
+  }
+
+  /* ---------- detectors (src/detect/) ---------- */
+
+  const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
+  const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
+
+  const DETECT = { threshold: 3, windowMs: 45000, radius: 4 };
+  const LIMITS = {
+    globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
+    maxPerMinute: 4, maxConsecutivePerPlayer: 2, dedupeWindowMs: 300000,
+  };
+
+  /* ---------- sanitise (src/chat/sanitize.js) ---------- */
+
+  const SOFTEN = [
+    [/\bfuck(?:ing|ed|er|s)?\b/gi, "freaking"], [/\bshit(?:ty|s)?\b/gi, "rubbish"],
+    [/\bbitch(?:es)?\b/gi, "clown"], [/\bdip\s?shit\b/gi, "genius"],
+    [/\bass(?:hole)?\b/gi, "muppet"], [/\bdick(?:head)?\b/gi, "muppet"],
+    [/\bdamn\b/gi, "darn"], [/\bhell\b/gi, "heck"], [/\bpiss\s?off\b/gi, "buzz off"],
+  ];
+
+  function sanitize(raw) {
+    let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
+    if (!text) return null;
+    if (/https?:\/\/|discord\.gg\//i.test(text)) return null;
+    if (state.profanity === "clean") for (const [p, r] of SOFTEN) text = text.replace(p, r);
+    if (text.length > 100) {
+      const cut = text.slice(0, 100);
+      const space = cut.lastIndexOf(" ");
+      text = (space > 60 ? cut.slice(0, space) : cut).trim();
+    }
+    return text;
+  }
+
+  /* ---------- state ---------- */
+
+  const state = {
+    persona: "snarky",
+    profanity: "clean",
+    channel: "all",
+    blocks: {},        // name -> [timestamps]
+    accusations: {},   // name -> count
+    pathfinder: { state: "running", blockedBy: null },
+    sent: [],          // {ts, message, subject, kind}
+    rotation: {},
+    log: [],
+  };
+
+  const el = (id) => document.getElementById(id);
+  const chatLog = el("chatLog");
+
+  /* ---------- chat rendering ---------- */
+
+  function rankHtml(player) {
+    const badge = player.rank ? RANKS[player.rank] + " " : "";
+    return '<span class="g-dgray">[' + player.level + "]</span> " + badge;
+  }
+
+  function pushLine(html, ours) {
+    const div = document.createElement("div");
+    div.className = "line" + (ours ? " ours" : "");
+    div.innerHTML = html;
+    chatLog.appendChild(div);
+    while (chatLog.children.length > 60) chatLog.removeChild(chatLog.firstChild);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function prefix(channel) {
+    return channel === "party" ? '<span class="g-blue">Party ></span> ' : "";
+  }
+
+  function sayAs(player, text, channel) {
+    pushLine(prefix(channel) + rankHtml(player) + '<span class="g-gray">' + player.name +
+      '</span><span class="g-gray">:</span> ' + escapeHtml(text), false);
+  }
+
+  function sayAsSelf(text, channel) {
+    pushLine(prefix(channel) + '<span class="g-dgray">[172]</span> ' + RANKS["MVP+"] +
+      ' <span class="g-aqua">' + SELF + '</span><span class="g-gray">:</span> ' + escapeHtml(text), true);
+  }
+
+  function systemLine(text) {
+    pushLine('<span class="g-yellow">' + escapeHtml(text) + "</span>", false);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  /* ---------- decision log ---------- */
+
+  function logEntry(kind, text) {
+    const now = new Date();
+    const stamp = String(now.getMinutes()).padStart(2, "0") + ":" + String(now.getSeconds()).padStart(2, "0");
+    state.log.push({ kind, text, stamp });
+    if (state.log.length > 40) state.log.shift();
+    renderLog();
+  }
+
+  function renderLog() {
+    el("log").innerHTML = state.log.map((entry) =>
+      '<div class="log-row"><span class="log-time">' + entry.stamp +
+      '</span><span class="log-kind ' + entry.kind + '">' + entry.kind +
+      '</span><span class="log-text">' + entry.text + "</span></div>"
+    ).join("");
+  }
+
+  /* ---------- rate limiter (src/chat/policy.js) ---------- */
+
+  function checkPolicy(trigger, message) {
+    const ts = Date.now();
+    const last = state.sent[state.sent.length - 1];
+    if (last && ts - last.ts < LIMITS.globalCooldownMs) {
+      return { allowed: false, reason: "global cooldown, " +
+        Math.ceil((LIMITS.globalCooldownMs - (ts - last.ts)) / 1000) + "s left" };
+    }
+    if (state.sent.filter((s) => ts - s.ts <= 60000).length >= LIMITS.maxPerMinute) {
+      return { allowed: false, reason: "per-minute limit reached" };
+    }
+    const sameKind = [...state.sent].reverse().find((s) => s.kind === trigger.kind);
+    if (sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
+      return { allowed: false, reason: "cooldown for " + trigger.kind };
+    }
+    if (trigger.subject) {
+      const samePlayer = [...state.sent].reverse().find((s) => s.subject === trigger.subject);
+      if (samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
+        return { allowed: false, reason: "cooldown for " + shortName(trigger.subject) };
+      }
+      let streak = 0;
+      for (let i = state.sent.length - 1; i >= 0; i--) {
+        if (state.sent[i].subject !== trigger.subject) break;
+        streak++;
+      }
+      if (streak >= LIMITS.maxConsecutivePerPlayer) {
+        return { allowed: false, reason: "already replied to " + shortName(trigger.subject) + " " + streak + "x in a row" };
+      }
+    }
+    if (message && state.sent.some((s) => s.message === message && ts - s.ts <= LIMITS.dedupeWindowMs)) {
+      return { allowed: false, reason: "duplicate message" };
+    }
+    return { allowed: true };
+  }
+
+  /* ---------- the pipeline ---------- */
+
+  function fallbackLine(trigger) {
+    const lines = PERSONAS[state.persona][trigger.kind] || PERSONAS[state.persona].mention;
+    const index = (state.rotation[trigger.kind] || 0);
+    state.rotation[trigger.kind] = index + 1;
+    return lines[index % lines.length].replace("{short}", shortName(trigger.subject || ""));
+  }
+
+  function respond(trigger) {
+    logEntry("trigger", "<em>" + trigger.kind + "</em> — " + trigger.evidence);
+
+    let gate = checkPolicy(trigger, null);
+    if (!gate.allowed) return logEntry("limit", gate.reason);
+
+    const message = sanitize(fallbackLine(trigger));
+    if (!message) return logEntry("skip", "blocked by the sanitiser");
+
+    gate = checkPolicy(trigger, message);
+    if (!gate.allowed) return logEntry("limit", gate.reason);
+
+    state.sent.push({ ts: Date.now(), message, subject: trigger.subject, kind: trigger.kind });
+    const delay = 600 + Math.random() * 1200;
+    logEntry("say", "typing in " + Math.round(delay) + "ms — <em>" + escapeHtml(message) + "</em>");
+    setTimeout(() => sayAsSelf(message, trigger.channel), delay);
+    renderMeters();
+  }
+
+  function incoming(player, text, channel) {
+    sayAs(player, text, channel);
+    const ts = Date.now();
+    const nearby = player.distance <= DETECT.radius * 3;
+
+    if (ACCUSATION.test(text)) {
+      const blocking = (state.blocks[player.name] || []).some((t) => ts - t <= 120000);
+      if (mentions(text, SELF) || nearby || blocking) {
+        state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
+        return respond({
+          kind: "accusation", subject: player.name, channel,
+          evidence: shortName(player.name) + " is accusing me of cheating" +
+            (blocking ? ", right after blocking my path" : "") +
+            (state.accusations[player.name] > 1 ? " (#" + state.accusations[player.name] + " in 5min)" : ""),
+        });
+      }
+      return logEntry("skip", "accusation not aimed at me — ignored");
+    }
+
+    if (HOSTILE.test(text) && (mentions(text, SELF) || nearby)) {
+      return respond({
+        kind: "hostile", subject: player.name, channel,
+        evidence: shortName(player.name) + " told me to move while standing next to me",
+      });
+    }
+
+    if (mentions(text, SELF)) {
+      return respond({
+        kind: "mention", subject: player.name, channel,
+        evidence: shortName(player.name) + " used my name",
+      });
+    }
+  }
+
+  function stepInFront(player) {
+    const ts = Date.now();
+    state.blocks[player.name] = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs);
+    state.blocks[player.name].push(ts);
+    state.pathfinder = { state: "blocked", blockedBy: player.name };
+    renderPathfinder();
+    renderRoster();
+
+    const count = state.blocks[player.name].length;
+    if (count < DETECT.threshold) {
+      return logEntry("skip", shortName(player.name) + " blocked the path (" + count + "/" +
+        DETECT.threshold + ") — not enough to be deliberate");
+    }
+    respond({
+      kind: "pathfinder_blocked", subject: player.name, channel: state.channel,
+      evidence: shortName(player.name) + " stepped in front " + count + "x in 45s, route keeps stopping",
+    });
+  }
+
+  function resumePath() {
+    state.pathfinder = { state: "running", blockedBy: null };
+    renderPathfinder();
+    logEntry("skip", "path clear — pathfinder resumed");
+  }
+
+  /* ---------- rendering ---------- */
+
+  function renderPathfinder() {
+    const blocked = state.pathfinder.state === "blocked";
+    el("pathDot").className = "dot" + (blocked ? " blocked" : "");
+    el("pathText").textContent = blocked
+      ? "pathfinder: blocked by " + shortName(state.pathfinder.blockedBy)
+      : "pathfinder: running";
+  }
+
+  function renderRoster() {
+    const ts = Date.now();
+    el("roster").innerHTML = PLAYERS.map((p, i) => {
+      const blocks = (state.blocks[p.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
+      return '<div class="roster-row"><span class="roster-name">' + escapeHtml(p.name) +
+        '<br><span class="roster-meta">' + p.distance.toFixed(1) + "m · short: " + shortName(p.name) +
+        (blocks ? " · blocked " + blocks + "/3" : "") +
+        '</span></span><button type="button" data-block="' + i + '">Step in front</button></div>';
+    }).join("");
+  }
+
+  function renderMeters() {
+    const ts = Date.now();
+    const last = state.sent[state.sent.length - 1];
+    const wait = last ? Math.max(0, LIMITS.globalCooldownMs - (ts - last.ts)) : 0;
+    const cooldown = el("meterCooldown");
+    cooldown.querySelector("b").textContent = wait ? Math.ceil(wait / 1000) + "s" : "ready";
+    cooldown.classList.toggle("hot", wait > 0);
+
+    const minute = state.sent.filter((s) => ts - s.ts <= 60000).length;
+    const minuteEl = el("meterMinute");
+    minuteEl.querySelector("b").textContent = minute + "/" + LIMITS.maxPerMinute;
+    minuteEl.classList.toggle("hot", minute >= LIMITS.maxPerMinute);
+
+    let streak = 0;
+    for (let i = state.sent.length - 1; i >= 0; i--) {
+      if (!last || state.sent[i].subject !== last.subject) break;
+      streak++;
+    }
+    const streakEl = el("meterStreak");
+    streakEl.querySelector("b").textContent = streak + "/" + LIMITS.maxConsecutivePerPlayer;
+    streakEl.classList.toggle("hot", streak >= LIMITS.maxConsecutivePerPlayer);
+  }
+
+  /* ---------- wiring ---------- */
+
+  const PRESETS = [
+    "ur macroing arent you",
+    "hey 3172 nice cape",
+    "move im mining here",
+    "reporting you for autoclicker",
+    "anyone got extra mithril?",
+  ];
+
+  function currentSpeaker() {
+    return PLAYERS[Number(el("speaker").value)] || PLAYERS[0];
+  }
+
+  function send(text) {
+    const value = String(text || "").trim();
+    if (!value) return;
+    incoming(currentSpeaker(), value, state.channel);
+    el("chatInput").value = "";
+    renderMeters();
+  }
+
+  el("speaker").innerHTML = PLAYERS.map((p, i) =>
+    '<option value="' + i + '">as ' + escapeHtml(p.name) + "</option>").join("");
+
+  el("presets").innerHTML = PRESETS.map((p) =>
+    '<button type="button" data-preset="' + escapeHtml(p) + '">' + escapeHtml(p) + "</button>").join("") +
+    '<button type="button" data-resume="1">path clear</button>';
+
+  el("presets").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.resume) return resumePath();
+    send(button.dataset.preset);
+  });
+
+  el("roster").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-block]");
+    if (button) stepInFront(PLAYERS[Number(button.dataset.block)]);
+  });
+
+  el("sendBtn").addEventListener("click", () => send(el("chatInput").value));
+  el("chatInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") send(el("chatInput").value);
+  });
+
+  el("persona").addEventListener("change", (e) => {
+    state.persona = e.target.value;
+    logEntry("skip", "persona switched to <em>" + state.persona + "</em>");
+  });
+  el("profanity").addEventListener("change", (e) => {
+    state.profanity = e.target.value;
+    logEntry("skip", "profanity policy: <em>" + state.profanity + "</em>");
+  });
+  el("channel").addEventListener("change", (e) => { state.channel = e.target.value; });
+
+  el("skipCooldown").addEventListener("click", () => {
+    state.sent = [];
+    renderMeters();
+    logEntry("skip", "cooldowns cleared (sandbox only)");
+  });
+
+  el("resetBtn").addEventListener("click", () => {
+    state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {}; state.log = [];
+    state.pathfinder = { state: "running", blockedBy: null };
+    chatLog.innerHTML = "";
+    boot();
+  });
+
+  function boot() {
+    systemLine("You are playing on mc.hypixel.net — SkyBlock");
+    sayAs(PLAYERS[2], "anyone selling enchanted mithril", "all");
+    sayAs(PLAYERS[0], "lol why are you just standing there", "all");
+    renderPathfinder(); renderRoster(); renderMeters(); renderLog();
+    logEntry("skip", "watching — nothing worth answering yet");
+  }
+
+  boot();
+  setInterval(renderMeters, 1000);
+})();
+</script>

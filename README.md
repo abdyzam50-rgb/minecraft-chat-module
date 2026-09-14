@@ -42,7 +42,8 @@ cp .env.example .env          # put your ANTHROPIC_API_KEY in here
 cp config.example.json config.json
 ```
 
-Edit `config.json` — at minimum set `username` to your IGN. Then:
+Edit `config.json` — `username` is preset to `3172`; change it if your IGN
+differs. Then:
 
 ```bash
 node --env-file=.env bin/mcchat.js            # or: npm start
@@ -57,6 +58,12 @@ node bin/simulate.js --persona snarky
 That replays a scripted griefer (blocks your path three times, then accuses you
 of macroing) and prints every decision, including the ones where it chooses to
 stay quiet.
+
+For a clickable version, open `web/chat-sandbox.html` in a browser — a fake
+Hypixel window where you can talk as another player, step in front of the
+pathfinder, and watch the limiter and decision log react. It runs the real
+detection, naming, sanitising and rate-limiting logic with the offline canned
+lines, so no key and no server are needed.
 
 ### Hooking up the client
 

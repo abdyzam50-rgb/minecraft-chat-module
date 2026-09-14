@@ -17,7 +17,7 @@ const args = Object.fromEntries(
 );
 
 const ai = createChatAI({
-  username: args.username ?? 'Technoblade',
+  username: args.username ?? '3172',
   persona: args.persona ?? 'snarky',
   // The scenario compresses ~2 minutes of game time into a second.
   limits: { globalCooldownMs: 0, perKindCooldownMs: 0, perPlayerCooldownMs: 0 },
