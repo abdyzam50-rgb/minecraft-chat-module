@@ -261,6 +261,18 @@ to someone calling them a cheater and goes back to what they were doing; trading
 shots until one side gives up is exactly what a bot would do. After three the
 log says "said my piece — letting it go".
 
+Two rules keep that budget from misfiring:
+
+**Only arguing spends the argument budget.** The turn count for an argument
+counts argument replies, not every reply in the run. A friendly chat that turns
+sour does not arrive at the accusation with the budget already gone.
+
+**A typed macro check is never suppressed.** "say something if ur real" is
+testing for exactly one thing — silence — so a bot that has talked itself into a
+rate limit fails it perfectly. Nothing except the mute guards and the repeat
+guard can stop that reply. (A macro-check callout *we* raise because someone is
+stood in the path is different: nobody is waiting on it, so it paces normally.)
+
 `maxPerMinute` moved from 4 to 8 to leave room for a real back-and-forth. That
 is still well inside normal human chat volume.
 
@@ -396,7 +408,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-81 tests over name shortening, chat parsing, detector thresholds, the macro-check
+83 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

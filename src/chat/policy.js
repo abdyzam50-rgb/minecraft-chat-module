@@ -1,7 +1,15 @@
 import { findRepeat } from './similarity.js';
 
 /** Exchanges worth cutting short rather than seeing through. */
-const ARGUMENT_KINDS = new Set(['accusation', 'hostile', 'macro_check']);
+const ARGUMENT_KINDS = new Set(['accusation', 'hostile']);
+
+/**
+ * Answering a macro check is not optional. Someone typing "say something if ur
+ * real" is testing for exactly one thing — silence — and a bot that has talked
+ * itself into a rate limit fails that test perfectly. Nothing here except the
+ * mute guards and the repeat guard may suppress one.
+ */
+const MUST_ANSWER = new Set(['macro_check']);
 
 /**
  * Rate limiting and repeat suppression.
@@ -44,8 +52,13 @@ export class Policy {
     const conversing = Boolean(trigger.conversational);
     const arguing = ARGUMENT_KINDS.has(trigger.kind);
 
+    // Only a check they TYPED must be answered. A callout we raise because
+    // someone is stood in our path is ours to pace — nobody is waiting on it.
+    const mustAnswer = MUST_ANSWER.has(trigger.kind) && conversing;
     const last = this.sent[this.sent.length - 1];
-    const gap = conversing ? C.cooldownMs : L.globalCooldownMs;
+    const baseGap = conversing ? C.cooldownMs : L.globalCooldownMs;
+    // mustAnswer may shorten the gap, never lengthen it.
+    const gap = mustAnswer ? Math.min(baseGap, 1000) : baseGap;
     if (last && ts - last.ts < gap) {
       return {
         allowed: false,
@@ -69,7 +82,7 @@ export class Policy {
     // minute and per hour caps, and the consecutive cap below — three replies
     // to one player and it stops, no matter how long they keep standing there.
     const escalating = Boolean(trigger.escalates);
-    const relaxed = escalating || conversing;
+    const relaxed = escalating || conversing || mustAnswer;
     const kindCooldown = relaxed ? 0 : L.perKindCooldownMs;
     const playerCooldown = relaxed ? 0 : L.perPlayerCooldownMs;
 
@@ -84,17 +97,24 @@ export class Policy {
       return { allowed: false, reason: `cooldown for ${trigger.kind}` };
     }
 
-    if (trigger.subject) {
+    if (trigger.subject && !mustAnswer) {
       const samePlayer = [...this.sent].reverse().find((s) => s.subject === trigger.subject);
       if (samePlayer && ts - samePlayer.ts < playerCooldown) {
         return { allowed: false, reason: `cooldown for ${trigger.subject}` };
       }
 
-      let streak = 0;
+      // The run of replies to this player, and how much of it was arguing.
+      // A friendly chat must not spend the argument budget: three pleasant
+      // answers followed by silence the moment they accuse you is backwards.
+      const run = [];
       for (let i = this.sent.length - 1; i >= 0; i -= 1) {
         if (this.sent[i].subject !== trigger.subject) break;
-        streak += 1;
+        run.push(this.sent[i]);
       }
+      const streak = arguing && conversing
+        ? run.filter((entry) => ARGUMENT_KINDS.has(entry.kind)).length
+        : run.length;
+
       if (streak >= consecutiveCap) {
         return {
           allowed: false,

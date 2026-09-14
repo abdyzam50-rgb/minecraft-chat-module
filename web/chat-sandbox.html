@@ -539,7 +539,10 @@
     spotClaimRadius: 20, // a spot claim reaches further
   };
   const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 12, maxArgumentTurns: 3 };
-  const ARGUMENT_KINDS = ["accusation", "hostile", "macro_check"];
+  const ARGUMENT_KINDS = ["accusation", "hostile"];
+  // Answering a typed macro check is not optional: silence is exactly what it
+  // tests for, and a bot that has talked itself into a rate limit fails it.
+  const MUST_ANSWER = ["macro_check"];
 
   const LIMITS = {
     globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
@@ -676,8 +679,10 @@
     // that stop us pestering a player unprompted.
     const conversing = Boolean(trigger.conversational);
     const arguing = ARGUMENT_KINDS.indexOf(trigger.kind) !== -1;
+    const mustAnswer = MUST_ANSWER.indexOf(trigger.kind) !== -1 && conversing;
     const last = state.sent[state.sent.length - 1];
-    const gap = conversing ? CONVO.cooldownMs : LIMITS.globalCooldownMs;
+    const baseGap = conversing ? CONVO.cooldownMs : LIMITS.globalCooldownMs;
+    const gap = mustAnswer ? Math.min(baseGap, 1000) : baseGap;
     if (last && ts - last.ts < gap) {
       return { allowed: false, reason: (conversing ? "still finishing the last reply, " : "global cooldown, ") +
         Math.ceil((gap - (ts - last.ts)) / 1000) + "s left" };
@@ -689,21 +694,25 @@
     // per-kind and per-player brakes step aside — a whole macro check happens
     // inside one 60s window. The consecutive cap below still bounds it.
     const escalating = Boolean(trigger.escalates);
-    const relaxed = escalating || conversing;
+    const relaxed = escalating || conversing || mustAnswer;
     const sameKind = [...state.sent].reverse().find((s) => s.kind === trigger.kind);
     if (!relaxed && sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
       return { allowed: false, reason: "cooldown for " + trigger.kind };
     }
-    if (trigger.subject) {
+    if (trigger.subject && !mustAnswer) {
       const samePlayer = [...state.sent].reverse().find((s) => s.subject === trigger.subject);
       if (!relaxed && samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
         return { allowed: false, reason: "cooldown for " + shortName(trigger.subject) };
       }
-      let streak = 0;
+      // A friendly chat must not spend the argument budget.
+      const run = [];
       for (let i = state.sent.length - 1; i >= 0; i--) {
         if (state.sent[i].subject !== trigger.subject) break;
-        streak++;
+        run.push(state.sent[i]);
       }
+      const streak = (arguing && conversing)
+        ? run.filter((e) => ARGUMENT_KINDS.indexOf(e.kind) !== -1).length
+        : run.length;
       let cap = LIMITS.maxConsecutivePerPlayer + (escalating ? 1 : 0);
       if (conversing) cap = arguing ? CONVO.maxArgumentTurns : CONVO.maxTurns;
       if (streak >= cap) {

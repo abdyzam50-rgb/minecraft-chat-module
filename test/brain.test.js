@@ -616,3 +616,89 @@ test('it is told to stop using their name once it has twice running', async () =
   assert.doesNotMatch(prompts[1], /starting to read as a script/);
   assert.match(prompts[2], /Do not use it again/, 'after two name-drops in a row it is told to stop');
 });
+
+/** The reported transcript, verbatim. Every line of it must get an answer. */
+test('a macro check is answered even after a long friendly chat', async () => {
+  // Distinct lines throughout — identical ones would be caught by the repeat
+  // guard and this test would be measuring the wrong thing.
+  const lines = [
+    'yo', 'grinding ghosts rn', 'not sure yet, been about an hour',
+    'im real mate', 'yh?', 'still here', 'report me then, i dont care',
+  ];
+  let clock = 1_700_000_000_000;
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: lines[call++ % lines.length], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+
+  for (const line of [
+    'Yo 3172',
+    'What u upto?',
+    'How much u made so far from that',
+    'macro check, say something if ur real',
+    'Yo?',
+    'macro check, say something if ur real',
+    'Im reporting u for macroin',
+  ]) {
+    await ai.handle({ type: 'chat', raw: `[MVP+] xX_DreamSlayer_Xx: ${line}` });
+    clock += 7000;
+  }
+
+  assert.equal(said.length, 7, `every line needs an answer, got ${said.length}`);
+  assert.equal(said[3].trigger, 'macro_check', 'the check is recognised as one');
+});
+
+test('a friendly chat does not spend the argument budget', async () => {
+  const lines = [
+    'yo', 'just grinding ghosts', 'cheers', 'about an hour now', 'one voltas so far',
+    'im not cheating', 'report me then', 'think what you like', 'still not a macro',
+  ];
+  let clock = 1_700_000_000_000;
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: lines[call++ % lines.length], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'Accuser', distance: 4 }] });
+
+  // Five friendly turns first — these must not count as arguing.
+  for (const line of ['yo 3172', 'what u upto', 'nice', 'how long', 'any drops']) {
+    await ai.handle({ type: 'chat', raw: `[MVP+] Accuser: ${line}` });
+    clock += 7000;
+  }
+  const afterChat = said.length;
+
+  for (let i = 0; i < 4; i += 1) {
+    await ai.handle({ type: 'chat', raw: `[MVP+] Accuser: 3172 ur cheating, take ${i}` });
+    clock += 7000;
+  }
+
+  assert.equal(said.length - afterChat, 3, 'three answers to the accusations, then it lets go');
+});
