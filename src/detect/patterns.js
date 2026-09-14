@@ -78,6 +78,35 @@ export const HOSTILE_NUDGE = new RegExp(
  */
 export const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|hell+o+|sup|wsup|oi+|psst|a+y+o*|heya|hiya|yo+)?[\s!?.,]*$/i;
 
+/**
+ * Words that carry no content on their own. A message made entirely of these
+ * is an acknowledgement — "mb g", "cool cool", "aight bro" — and wants a token
+ * back or nothing at all, never a sentence.
+ */
+const FILLER_WORDS = new Set([
+  'mb', 'my', 'bad', 'soz', 'sorry', 'apologies',
+  'all', 'g', 'good', 'np', 'no', 'worries', 'problem', 'fine',
+  'cool', 'nice', 'aight', 'ight', 'alr', 'alright', 'ok', 'okay', 'kk', 'k',
+  'gotcha', 'ic', 'i', 'see', 'fair', 'enough', 'true', 'word', 'bet', 'facts',
+  'lol', 'lmao', 'lmfao', 'haha', 'hahaha', 'hah', 'xd', 'rip',
+  'gg', 'ty', 'thanks', 'thx', 'tysm', 'cheers', 'ez',
+  'yh', 'yeah', 'ya', 'yep', 'yup', 'nah', 'oh', 'ah', 'ahh', 'damn',
+  'bro', 'man', 'mate', 'lad', 'dude', 'bruh', 'gang', 'twin',
+]);
+
+/**
+ * Is the whole message filler? Checked against what is left after our own name
+ * is stripped out.
+ */
+export function isSmallTalk(text) {
+  const words = String(text ?? '')
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.length > 0 && words.every((word) => FILLER_WORDS.has(word));
+}
+
 /** A question aimed at us. */
 export function looksLikeQuestion(text) {
   return /\?\s*$/.test(text) || /^(what|why|how|who|where|when|are|is|do|does|can|u\s|you\s)/i.test(text);

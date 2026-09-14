@@ -115,6 +115,15 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  if (trigger.smalltalk) {
+    lines.push(
+      '',
+      'That is an acknowledgement, not a question — they are wrapping up, not asking anything. Match it: one or two words at most. "all g", "np", "cool", "yh", "no worries".',
+      'Do not restate what you are doing, do not add anything new, do not start a fresh topic.',
+      'Saying nothing at all is an entirely normal reply to this, and often the better one — set respond to false if the exchange has simply finished.',
+    );
+  }
+
   if (trigger.opener) {
     lines.push(
       '',

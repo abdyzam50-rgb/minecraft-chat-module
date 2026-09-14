@@ -702,3 +702,70 @@ test('a friendly chat does not spend the argument budget', async () => {
 
   assert.equal(said.length - afterChat, 3, 'three answers to the accusations, then it lets go');
 });
+
+test('an acknowledgement gets a token back, not a paragraph', async () => {
+  const capture = {};
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: mockClient({ respond: true, message: 'all g', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172' });
+  clock += 7000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: Mb G' });
+
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /acknowledgement, not a question/);
+  assert.match(prompt, /Do not restate what you are doing/);
+  assert.match(prompt, /Saying nothing at all is an entirely normal reply/);
+  assert.equal(said.at(-1).message, 'all g');
+});
+
+test('silence is accepted as the answer to filler', async () => {
+  let clock = 1_700_000_000_000;
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          // First a real answer, then the model decides the exchange is done.
+          const reply = call++ === 0
+            ? { respond: true, message: 'just grinding ghosts', reason: '' }
+            : { respond: false, message: '', reason: 'nothing left to say' };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }] };
+        },
+      },
+    },
+  });
+  const said = [];
+  const skipped = [];
+  ai.on('say', (a) => said.push(a));
+  ai.on('skip', (s) => skipped.push(s.reason));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 what you upto' });
+  clock += 7000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: cool cool' });
+
+  assert.equal(said.length, 1, 'the filler goes unanswered, which is fine');
+  assert.equal(skipped.at(-1), 'nothing left to say');
+});
+
+test('a real question is never mistaken for filler', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'just grinding ghosts', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: cool wheres the ghosts at 3172' });
+
+  assert.doesNotMatch(capture.params.messages[0].content, /acknowledgement, not a question/);
+});

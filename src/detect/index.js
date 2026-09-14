@@ -3,6 +3,7 @@ import {
   ACCUSATION,
   AGGRESSIVE,
   GREETING_ONLY,
+  isSmallTalk,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
   MUTE_NOTICE,
@@ -243,6 +244,8 @@ export function detectMention(store, config, message, ts = Date.now()) {
     .replace(/\s+/g, ' ')
     .trim();
   const opener = GREETING_ONLY.test(remainder);
+  // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
+  const smalltalk = !opener && isSmallTalk(remainder);
 
   return {
     kind: isWhisper ? 'whisper' : 'mention',
@@ -250,8 +253,11 @@ export function detectMention(store, config, message, ts = Date.now()) {
     severity: 1,
     conversational: true,
     opener,
+    smalltalk,
     evidence: opener
       ? `${message.sender} just called my name — "${message.content}" — nothing else in it.`
+      : smalltalk
+      ? `${message.sender} said "${message.content}" — that is an acknowledgement, there is no question in it.`
       : `${message.sender} ${isWhisper ? 'whispered' : 'said'} "${message.content}"${
           named ? ` and used my name (${shortName(config.username)})` : ''
         }${continuing ? ', carrying on the conversation we are already having' : ''}.`,

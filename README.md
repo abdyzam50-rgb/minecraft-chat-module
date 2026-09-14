@@ -213,9 +213,18 @@ that's only your name plus a greeting is flagged `opener`, and the reply is one
 or two characters — `?`, `yh?`, `what`, `wha`, `sup`. It doesn't volunteer what
 it's doing until asked.
 
+**Answering filler with content.** "mb g", "cool cool", "aight bro" are
+acknowledgements — the conversation is closing, not continuing. A message made
+entirely of filler words is flagged `smalltalk` and gets a token back (`all g`,
+`np`, `cool`) or nothing at all. The prompt says outright that silence is a
+normal reply here and often the better one, because re-stating what you're doing
+to someone who just said "my bad" is pure robot.
+
 ```
 Dream: Yo 3172                    ->  ?
 Dream: yo 3172 what you upto      ->  just grinding ghosts
+Dream: Mb G                       ->  all g
+Dream: cool cool                  ->  (nothing)
 ```
 
 ### Typing like a person
@@ -408,7 +417,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-83 tests over name shortening, chat parsing, detector thresholds, the macro-check
+86 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
-typing model, conversation continuity and turn budgets, one-word openers, name fatigue, the rate limiter, sanitisation, the bridge, and the full
+typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

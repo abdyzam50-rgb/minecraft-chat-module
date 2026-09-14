@@ -448,6 +448,7 @@
       spot_claim: ["mb, ill move", "oh sorry, all yours", "my bad, ill shift over", "no worries, ill find another spawn", "ah mb, moving now"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
       opener: ["yh?", "?", "sup", "whats up"],
+      smalltalk: ["all g", "no worries", "all good", "np"],
       mention: ["just grinding ghosts", "ghosts in the mist", "grinding ghosts, you?"],
     },
     snarky: {
@@ -465,6 +466,7 @@
       spot_claim: ["mb ill move", "fair enough, ill shift", "all yours", "aight, moving", "yeah fair, ill go elsewhere"],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
       opener: ["?", "yh?", "what", "wha"],
+      smalltalk: ["all g", "np", "cool", "yh"],
       mention: ["just grinding ghosts", "ghosts, same as ever", "grinding ghosts. you?"],
     },
     unfiltered: {
@@ -482,6 +484,7 @@
       spot_claim: ["mb ill move", "aight fair, moving", "yeah alright, all yours", "fine, ill shift over", "my bad, going"],
       hostile: ["piss off, it's a public lobby", "get lost"],
       opener: ["?", "what", "wha", "yh"],
+      smalltalk: ["all g", "np", "yh", "cool"],
       mention: ["just grinding ghosts mate", "grinding ghosts", "ghosts, what else"],
     },
   };
@@ -530,6 +533,14 @@
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
+  const FILLER_WORDS = ["mb","my","bad","soz","sorry","apologies","all","g","good","np","no","worries","problem","fine","cool","nice","aight","ight","alr","alright","ok","okay","kk","k","gotcha","ic","i","see","fair","enough","true","word","bet","facts","lol","lmao","lmfao","haha","hahaha","hah","xd","rip","gg","ty","thanks","thx","tysm","cheers","ez","yh","yeah","ya","yep","yup","nah","oh","ah","ahh","damn","bro","man","mate","lad","dude","bruh","gang","twin"];
+
+  /** A message made only of filler is an acknowledgement, not a question. */
+  function isSmallTalk(text) {
+    const words = String(text || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+    return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
+  }
+
   const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|oi+|psst|a+y+o*|heya|hiya)?[\s!?.,]*$/i;
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
@@ -821,6 +832,9 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.smalltalk
+        ? 'That is an acknowledgement, not a question — they are wrapping up. Match it: one or two words at most. "all g", "np", "cool", "yh". Do not restate what you are doing or start a new topic. Saying nothing at all is an entirely normal reply here — set respond to false if the exchange has simply finished.'
+        : "",
       trigger.opener
         ? 'They have just called your name and said nothing else. Answer the way a player does: one or two characters. "?", "yh?", "what", "wha", "sup". Nothing longer, and do not tell them what you are doing until they ask.'
         : "",
@@ -881,7 +895,9 @@
   /* ---------- the pipeline ---------- */
 
   function fallbackLine(trigger) {
-    const kind = trigger.opener && PERSONAS[state.persona].opener ? "opener" : trigger.kind;
+    let kind = trigger.kind;
+    if (trigger.opener && PERSONAS[state.persona].opener) kind = "opener";
+    else if (trigger.smalltalk && PERSONAS[state.persona].smalltalk) kind = "smalltalk";
     const entry = PERSONAS[state.persona][kind] || PERSONAS[state.persona].mention;
     const lines = Array.isArray(entry) ? entry : entry[trigger.anger || 1];
     const key = kind + ":" + (trigger.anger || 1);
@@ -1017,10 +1033,14 @@
       // wants "?" back, not a sentence about ghost drops.
       const remainder = text.replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
       const opener = GREETING_ONLY.test(remainder);
+      const smalltalk = !opener && isSmallTalk(remainder);
       return respond({
-        kind: "mention", subject: player.name, channel, conversational: true, opener: opener,
+        kind: "mention", subject: player.name, channel, conversational: true,
+        opener: opener, smalltalk: smalltalk,
         evidence: opener
           ? shortName(player.name) + " just called my name, nothing else in it"
+          : smalltalk
+          ? shortName(player.name) + ' said "' + escapeHtml(text) + '" — an acknowledgement, no question in it'
           : shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
       });
     }
@@ -1142,6 +1162,7 @@
     "u real?",
     "ur macroing arent you",
     "yo 3172",
+    "mb g",
     "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",

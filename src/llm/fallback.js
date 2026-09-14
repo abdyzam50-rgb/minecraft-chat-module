@@ -13,8 +13,10 @@ export class FallbackResponder {
 
   decide(store, trigger) {
     const persona = getPersona(this.config.persona);
-    // A bare "yo <name>" wants "?" back, not a sentence.
-    const key = trigger.opener && persona.fallback.opener ? 'opener' : trigger.kind;
+    // A bare "yo <name>" wants "?" back; "mb g" wants "all g" or nothing.
+    let key = trigger.kind;
+    if (trigger.opener && persona.fallback.opener) key = 'opener';
+    else if (trigger.smalltalk && persona.fallback.smalltalk) key = 'smalltalk';
     const entry = persona.fallback[key] ?? persona.fallback.mention ?? [];
     // Some kinds escalate, and store their lines keyed by anger level.
     const lines = Array.isArray(entry) ? entry : entry[trigger.anger ?? 1] ?? entry[1] ?? [];
