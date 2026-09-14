@@ -52,6 +52,28 @@ contract, so swapping is one config line.
 The Gemini path is plain `fetch` against the REST API, so there's no extra
 dependency. Adding a third provider means one file with a `decide()` method.
 
+Put the key in `.env` (which is gitignored) rather than in `config.json`:
+
+```
+GEMINI_API_KEY=...
+MCCHAT_PROVIDER=gemini
+```
+
+Then check it actually works before you rely on it:
+
+```bash
+node --env-file=.env bin/mcchat.js --check
+```
+
+That sends one real request through the whole path — config, system prompt,
+knowledge file, schema, transport, parsing — with a player saying "wsg", and
+prints what came back. It reports whether the knowledge file loaded, and flags a
+reply that's longer than a greeting warrants.
+
+If you flip provider by environment variable while `config.json` still names a
+model from the other one, the mismatch is corrected and said out loud rather
+than failing as a confusing 400.
+
 **But changing model rarely fixes a wrong answer about the game.** Asked for
 early-game money methods, the bot answered "slayer or f7" — both endgame. That
 isn't a reasoning failure any model size fixes; it's that SkyBlock's meta moves
@@ -582,7 +604,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-125 tests over name shortening, chat parsing, detector thresholds, the macro-check
+128 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

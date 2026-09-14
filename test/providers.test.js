@@ -108,3 +108,28 @@ test('resolving one config never leaks into the next', () => {
   first.limits.maxPerMinute = 999;
   assert.notEqual(resolveConfig({ username: '3172' }).limits.maxPerMinute, 999);
 });
+
+test('a model left over from another provider is corrected, not sent', () => {
+  // Flipping provider by env while config.json still names a Claude model.
+  const config = resolveConfig(
+    { username: '3172', llm: { model: 'claude-opus-5' } },
+    { MCCHAT_PROVIDER: 'gemini' },
+  );
+  assert.equal(config.llm.provider, 'gemini');
+  assert.equal(config.llm.model, 'gemini-2.5-flash');
+  assert.equal(config.llm.correctedModel, 'claude-opus-5', 'and it says what it changed');
+});
+
+test('an unfamiliar model id is left alone', () => {
+  const config = resolveConfig({
+    username: '3172',
+    llm: { provider: 'gemini', model: 'my-proxy/some-model' },
+  });
+  assert.equal(config.llm.model, 'my-proxy/some-model');
+  assert.equal(config.llm.correctedModel, undefined);
+});
+
+test('a matching model is untouched', () => {
+  const config = resolveConfig({ username: '3172', llm: { provider: 'gemini', model: 'gemini-2.5-pro' } });
+  assert.equal(config.llm.model, 'gemini-2.5-pro');
+});

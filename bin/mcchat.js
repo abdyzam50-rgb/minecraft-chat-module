@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createChatAI } from '../src/index.js';
 import { startBridge } from '../src/bridge/server.js';
+import { checkProvider } from '../src/check.js';
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -21,6 +22,7 @@ mcchat — context-aware Minecraft chat AI
   --persona <name>    chill | snarky | unfiltered
   --port <n>          bridge port (default 8787)
   --token <secret>    require this in the X-Auth header
+  --check             make one real API call and report what came back
   --dry-run           decide and log, never send
   --help
 `);
@@ -65,6 +67,41 @@ if (!ai.usingApi) {
   console.log('[mcchat] Those repeat. Set a key before using this anywhere real.');
 }
 console.log(`[mcchat] ${ai.config.username} / persona ${ai.config.persona}${ai.config.dryRun ? ' / DRY RUN' : ''}`);
+if (ai.config.llm.correctedModel) {
+  console.log(
+    `[mcchat] llm.model was "${ai.config.llm.correctedModel}", which is not a ${ai.config.llm.provider} model — using ${ai.config.llm.model}`,
+  );
+}
+
+if (args.check) {
+  console.log(`[check] ${ai.config.llm.provider} / ${ai.config.llm.model} — sending one real request...`);
+  if (!ai.usingApi) {
+    console.error(
+      `[check] no key found. Set ${
+        ai.config.llm.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'
+      } (or llm.apiKey) and try again.`,
+    );
+    process.exit(1);
+  }
+  try {
+    const result = await checkProvider(ai);
+    console.log(`[check] ok in ${result.ms}ms`);
+    console.log(
+      result.knowledgeChars
+        ? `[check] knowledge file loaded (${result.knowledgeChars} chars)`
+        : '[check] no knowledge file — set knowledge.file to knowledge/skyblock.md so it stops guessing about the game',
+    );
+    console.log(`[check] a player said "wsg" and it replied: ${JSON.stringify(result.message)}`);
+    console.log(`[check] respond=${result.respond} reason=${JSON.stringify(result.reason)}`);
+    if (result.respond && result.message.split(/\s+/).length > 3) {
+      console.log('[check] note: that is longer than a greeting warrants — worth a look');
+    }
+  } catch (error) {
+    console.error(`[check] FAILED: ${error.message}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 startBridge(ai);
 

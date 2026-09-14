@@ -253,11 +253,26 @@ const DEFAULT_MODELS = {
   gemini: 'gemini-2.5-flash',
 };
 
+/** Which provider a model id plainly belongs to, if it is obvious. */
+function modelOwner(model) {
+  if (/^claude-/i.test(model)) return 'claude';
+  if (/^gemini-/i.test(model)) return 'gemini';
+  return null;
+}
+
 export function resolveConfig(options = {}, env = process.env) {
   const config = merge(merge(DEFAULTS, options), fromEnv(env));
   const errors = [];
 
-  if (!config.llm.model) config.llm.model = DEFAULT_MODELS[config.llm.provider];
+  // Switching provider (often via MCCHAT_PROVIDER) leaves whatever model the
+  // config file named, and "gemini / claude-opus-5" fails in a confusing way.
+  // Only correct an id that plainly belongs to a different provider, so custom
+  // or proxied names are left alone.
+  const owner = config.llm.model ? modelOwner(config.llm.model) : null;
+  if (!config.llm.model || (owner && owner !== config.llm.provider)) {
+    config.llm.correctedModel = config.llm.model || null;
+    config.llm.model = DEFAULT_MODELS[config.llm.provider];
+  }
 
   if (!config.username) {
     errors.push('config.username is required (your in-game name)');

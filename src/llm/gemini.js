@@ -70,7 +70,15 @@ export class GeminiResponder {
       });
 
       if (!response.ok) {
-        throw new Error(`Gemini ${response.status}: ${(await response.text()).slice(0, 200)}`);
+        const raw = await response.text();
+        let detail = raw.slice(0, 200);
+        try {
+          const parsed = JSON.parse(raw);
+          detail = parsed.error?.message ?? detail;
+        } catch {
+          /* keep the raw slice */
+        }
+        throw new Error(`Gemini ${response.status}: ${detail}`);
       }
 
       const body = await response.json();
