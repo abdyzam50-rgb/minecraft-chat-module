@@ -265,3 +265,18 @@ test('a greeting with a question attached is not just a greeting', () => {
     assert.notEqual(trigger?.opener, true, `"${text}" asks something`);
   }
 });
+
+test('praise is told apart from questions and accusations', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+
+  const compliment = (text) => detectFromChat(store, config, chat('Dream', text), NOW)?.compliment === true;
+
+  assert.ok(compliment('3172 you seem really rich'));
+  assert.ok(compliment('3172 u must be loaded'));
+  assert.ok(compliment('3172 ur cracked at this'));
+
+  assert.ok(!compliment('3172 u good?'), 'that is asking if we are ok');
+  assert.ok(!compliment('3172 how much u made'), 'that is a question');
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172 ur macroing'), NOW).kind, 'accusation');
+});

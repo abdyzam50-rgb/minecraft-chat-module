@@ -252,10 +252,27 @@ Ghost grinding pays well and everyone knows it, so "you seem rich" is a
 compliment — it gets taken, not deflected. Coins, drops and how long you've been
 at it are ordinary small talk.
 
-That needed a fix because the instruction *"you do not admit to anything"* was
-sitting in the global context and colouring every reply, so the bot was evasive
-about things nobody was accusing it of. It now applies only to `accusation`
-triggers, where it belongs: deny once, briefly, move on.
+That took two goes. The first cause was *"you do not admit to anything"* sitting
+in the global context and colouring every reply; that now applies only to
+`accusation` triggers — deny once, briefly, move on.
+
+The second was subtler and beat the first fix. The mention block carried
+*"Asked what you are doing? Say what you are doing — name the grind"* — added
+earlier to stop one-word deflections — and it sat in the per-message prompt,
+where it outweighed a compliment note buried in the cached system half. So the
+bot named the grind whether or not anyone had asked. Two changes: that line is
+now conditional on the message actually being an activity question
+(`ACTIVITY_QUESTION`), and praise gets its own block:
+
+```
+Dream: 3172 you seem really rich   ->  compliment: take it
+Dream: 3172 wyd                    ->  they asked: name the grind
+Dream: 3172 u good?                ->  neither — that's asking if you're ok
+```
+
+The lesson, and it has cost several rounds: **a per-message instruction beats a
+system-prompt one every time.** If a rule keeps losing, check what else is being
+said in the same block.
 
 ### Slang
 
@@ -529,7 +546,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-109 tests over name shortening, chat parsing, detector thresholds, the macro-check
+113 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

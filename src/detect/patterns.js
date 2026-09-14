@@ -169,6 +169,26 @@ export function isSmallTalk(text) {
  */
 export const SHORT_QUESTION = /^(?:wyd|wbu|hbu|wu|hru|u\s?(?:good|ok|gud)|ya\s?good)[\s!?.]*$/i;
 
+/** Are they actually asking what we are doing? */
+export const ACTIVITY_QUESTION =
+  /\bwyd\b|\bwhat\b[^?]{0,20}\b(?:you|u|ur)\b[^?]{0,20}\b(?:doing|do|upto|up\s?to|on|grinding|farming)\b|\bwhat\s?(?:you|u)\s?(?:up\s?to|on)\b|\bhows?\s+the\s+(?:grind|farm)\b/i;
+
+/** Praise, rather than a question or a charge. */
+const PRAISE =
+  /\b(?:rich|wealthy|loaded|cracked|goated|insane|op|pro|beast|godly|impressive|sick|nuts|mental|fire|sweaty|efficient|quick|fast|grinder)\b|\b(?:really|so|very|pretty|mad|well|proper)\s+good\b|\bgood\s+at\b/i;
+
+/**
+ * Is this a compliment aimed at us? Ghost grinding is lucrative and everyone
+ * knows it, so "you seem rich" is praise, not an allegation — deflecting it
+ * reads as guilt about something nobody raised.
+ */
+export function isCompliment(text, isNamed) {
+  const content = String(text ?? '');
+  if (!PRAISE.test(content)) return false;
+  if (ACCUSATION.test(content)) return false;
+  return isNamed || /\b(?:u|you|ur|your|yours)\b/i.test(content);
+}
+
 /** A question aimed at us. */
 export function looksLikeQuestion(text) {
   return (

@@ -3,6 +3,8 @@ import {
   ACCUSATION,
   accusationTarget,
   AGGRESSIVE,
+  ACTIVITY_QUESTION,
+  isCompliment,
   isGreetingOnly,
   isSmallTalk,
   HOSTILE_NUDGE,
@@ -253,6 +255,8 @@ export function detectMention(store, config, message, ts = Date.now()) {
   const opener = isGreetingOnly(remainder);
   // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
   const smalltalk = !opener && isSmallTalk(remainder);
+  const compliment = !opener && !smalltalk && isCompliment(message.content, named);
+  const askedActivity = ACTIVITY_QUESTION.test(message.content);
 
   // Nothing left once the name is gone and it is not a greeting — nothing to
   // answer. (A short message is not the same as an empty one: "wsg" and "idk"
@@ -266,10 +270,14 @@ export function detectMention(store, config, message, ts = Date.now()) {
     conversational: true,
     opener,
     smalltalk,
+    compliment,
+    askedActivity,
     evidence: opener
       ? `${message.sender} just called my name — "${message.content}" — nothing else in it.`
       : smalltalk
       ? `${message.sender} said "${message.content}" — that is an acknowledgement, there is no question in it.`
+      : compliment
+      ? `${message.sender} said "${message.content}" — that is a compliment, not a question and not an accusation.`
       : `${message.sender} ${isWhisper ? 'whispered' : 'said'} "${message.content}"${
           named ? ` and used my name (${shortName(config.username)})` : ''
         }${continuing ? ', carrying on the conversation we are already having' : ''}.`,

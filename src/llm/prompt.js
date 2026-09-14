@@ -133,6 +133,18 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  if (trigger.askedActivity) {
+    lines.push('They asked what you are doing — say it: you are grinding ghosts.');
+  }
+
+  if (trigger.compliment) {
+    lines.push(
+      '',
+      'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line.',
+      'Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. "nah just grinding ghosts" is a denial of something nobody accused you of, and denying a compliment is what someone with a guilty conscience does.',
+    );
+  }
+
   if (trigger.smalltalk) {
     lines.push(
       '',
@@ -157,7 +169,7 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push(
       '',
       'This one is not testing you — they are just talking to you. Answer them properly, the way you would answer someone standing next to you at the same grind. Keep the attitude for people being deliberately annoying.',
-      'If they asked something, actually answer it before anything else. Asked what you are doing? Say what you are doing — name the grind. A one-word deflection like "what" or "yeah?" is never the answer to a real question.',
+      'If they asked something, actually answer it before anything else. A one-word deflection like "what" or "yeah?" is never the answer to a real question.',
     );
   }
 

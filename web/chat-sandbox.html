@@ -544,6 +544,16 @@
     return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
   }
 
+  const ACTIVITY_QUESTION = /\bwyd\b|\bwhat\b[^?]{0,20}\b(?:you|u|ur)\b[^?]{0,20}\b(?:doing|do|upto|up\s?to|on|grinding|farming)\b|\bwhat\s?(?:you|u)\s?(?:up\s?to|on)\b|\bhows?\s+the\s+(?:grind|farm)\b/i;
+  const PRAISE = /\b(?:rich|wealthy|loaded|cracked|goated|insane|op|pro|beast|godly|impressive|sick|nuts|mental|fire|sweaty|efficient|quick|fast|grinder)\b|\b(?:really|so|very|pretty|mad|well|proper)\s+good\b|\bgood\s+at\b/i;
+
+  /** Ghost grinding is lucrative, so "you seem rich" is praise, not a charge. */
+  function isCompliment(text, isNamed) {
+    if (!PRAISE.test(text)) return false;
+    if (ACCUSATION.test(text)) return false;
+    return isNamed || /\b(?:u|you|ur|your|yours)\b/i.test(text);
+  }
+
   const GREETING_WORD = /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
 
   /** People stack greetings — "yo wsg", "hey yo" — and it is all still hello. */
@@ -899,6 +909,10 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.compliment
+        ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
+        : "",
+      trigger.askedActivity ? "They asked what you are doing — say it: you are grinding ghosts." : "",
       trigger.smalltalk
         ? 'That is an acknowledgement, not a question — they are wrapping up. Match it: one or two words at most. "all g", "np", "cool", "yh". Do not restate what you are doing or start a new topic. Saying nothing at all is an entirely normal reply here — set respond to false if the exchange has simply finished.'
         : "",
@@ -1114,13 +1128,17 @@
       const remainder = text.replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
       const opener = isGreetingOnly(remainder);
       const smalltalk = !opener && isSmallTalk(remainder);
+      const compliment = !opener && !smalltalk && isCompliment(text, named);
       return respond({
         kind: "mention", subject: player.name, channel, conversational: true,
-        opener: opener, smalltalk: smalltalk,
+        opener: opener, smalltalk: smalltalk, compliment: compliment,
+        askedActivity: ACTIVITY_QUESTION.test(text),
         evidence: opener
           ? shortName(player.name) + " just called my name, nothing else in it"
           : smalltalk
           ? shortName(player.name) + ' said "' + escapeHtml(text) + '" — an acknowledgement, no question in it'
+          : compliment
+          ? shortName(player.name) + ' said "' + escapeHtml(text) + '" — a compliment, not a question and not an accusation'
           : shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
       });
     }

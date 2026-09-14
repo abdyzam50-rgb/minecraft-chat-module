@@ -418,7 +418,7 @@ test('the model is told to name the grind rather than deflect', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 9 }] });
   await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
 
-  assert.match(capture.params.messages[0].content, /name the grind/);
+  assert.match(capture.params.messages[0].content, /They asked what you are doing — say it/);
 });
 
 test('a fair claim gets conceded, and differently each time', async () => {
@@ -977,4 +977,51 @@ test('the grind is named positively, without the wrong phrase in the prompt', as
   const system = capture.params.system[0].text;
   assert.match(system, /The phrase for what you are doing is "grinding ghosts"/);
   assert.doesNotMatch(system, /grinding mist/i, 'naming the bad phrase is what kept producing it');
+});
+
+test('a compliment is taken, and the grind is not volunteered', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'yh made a bit ngl', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 you seem really rich' });
+
+  assert.equal(said.length, 1);
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /That is a compliment\. Take it/);
+  assert.match(prompt, /denying a compliment is what someone with a guilty conscience does/);
+  assert.doesNotMatch(prompt, /They asked what you are doing/, 'nobody asked what it was doing');
+});
+
+test('being asked what you are doing still gets the grind named', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'grinding ghosts', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 wyd' });
+
+  assert.match(capture.params.messages[0].content, /They asked what you are doing — say it/);
+});
+
+test('a compliment is not confused with an accusation or a check', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'cheers', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 ur cracked at this' });
+
+  assert.equal(said[0].trigger, 'mention');
+  assert.match(capture.params.messages[0].content, /That is a compliment/);
 });
