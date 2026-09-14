@@ -1,3 +1,5 @@
+import { findRepeat } from './similarity.js';
+
 /**
  * Rate limiting and repeat suppression.
  *
@@ -79,13 +81,28 @@ export class Policy {
     }
 
     if (message) {
-      const duplicate = this.sent.find(
-        (s) => s.message === message && ts - s.ts <= L.dedupeWindowMs,
-      );
-      if (duplicate) return { allowed: false, reason: 'duplicate message' };
+      const repeat = findRepeat(message, this.recent(L.dedupeWindowMs, ts), {
+        threshold: this.config.chat.similarityThreshold,
+        names: [trigger.subject].filter(Boolean),
+      });
+      if (repeat.repeat) {
+        return {
+          allowed: false,
+          reason: `too close to something I already said ("${repeat.match}")`,
+          repeat,
+        };
+      }
     }
 
     return { allowed: true };
+  }
+
+  /** Lines sent inside `windowMs`, newest first. */
+  recent(windowMs = this.config.limits.dedupeWindowMs, ts = this.now()) {
+    return this.sent
+      .filter((s) => ts - s.ts <= windowMs)
+      .map((s) => s.message)
+      .reverse();
   }
 
   record(trigger, message) {

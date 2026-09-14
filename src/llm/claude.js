@@ -21,7 +21,7 @@ export class ClaudeResponder {
   /**
    * @returns {Promise<{respond:boolean, message:string, reason:string, source:string}>}
    */
-  async decide(store, trigger, ts = Date.now()) {
+  async decide(store, trigger, ts = Date.now(), options = {}) {
     if (!this.client) {
       throw new Error('No Anthropic client: set ANTHROPIC_API_KEY');
     }
@@ -38,7 +38,9 @@ export class ClaudeResponder {
           system: [
             { type: 'text', text: this.systemPrompt, cache_control: { type: 'ephemeral' } },
           ],
-          messages: [{ role: 'user', content: buildUserPrompt(store, this.config, trigger, ts) }],
+          messages: [
+            { role: 'user', content: buildUserPrompt(store, this.config, trigger, ts, options) },
+          ],
           output_config: {
             effort,
             format: { type: 'json_schema', schema: RESPONSE_SCHEMA },

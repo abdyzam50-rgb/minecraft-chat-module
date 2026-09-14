@@ -25,6 +25,14 @@ export function buildSystemPrompt(config) {
     '- Never explain yourself twice or start with a greeting.',
     '- Do not mention that you are an AI, a model, or a program.',
     '',
+    'Sounding like a person, not a script — this matters more than being clever:',
+    '- Every line you write must be new. Never reuse a line, a structure, or a joke you have already used, even reworded.',
+    '- Vary how you open. Do not start every line with their name, or always with the same verb.',
+    '- Vary the length. Sometimes one word is the whole reply. Sometimes it is a full sentence.',
+    '- A real person repeating themselves gets shorter and blunter, not longer and wittier.',
+    '- React to what is actually in front of you — what they just said, how long this has gone on, where you are — rather than producing a generic line that would fit any argument.',
+    '- No catchphrases. If a line feels like something you would say again next time, write a different one.',
+    '',
     `Tone (${persona.label}):`,
     ...persona.rules.map((r) => `- ${r}`),
     '',
@@ -69,7 +77,7 @@ function formatNearby(store, ts) {
 }
 
 /** The per-event half of the prompt: current world state plus the trigger. */
-export function buildUserPrompt(store, config, trigger, ts = Date.now()) {
+export function buildUserPrompt(store, config, trigger, ts = Date.now(), options = {}) {
   const subjectShort = trigger.subject
     ? shortName(trigger.subject, { overrides: config.shortNames })
     : null;
@@ -103,11 +111,19 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now()) {
       lines.push('Yell it. Write the whole line in capitals — you are shouting, not talking.');
     }
   }
-  if (store.lastOutgoing && ts - store.lastOutgoing.ts < 120000) {
+  if (options.avoid?.length) {
     lines.push(
       '',
-      `You last said, ${Math.round((ts - store.lastOutgoing.ts) / 1000)}s ago: "${store.lastOutgoing.message}"`,
-      'Do not repeat that point — either add something new or stay quiet.',
+      'You have already said these, most recent first:',
+      ...options.avoid.map((line) => `  "${line}"`),
+      'Do not repeat any of them, reword any of them, or reach for the same joke twice. Say something new or say nothing.',
+    );
+  }
+
+  if (options.rejected) {
+    lines.push(
+      '',
+      `You just tried "${options.rejected}" and it was too close to something above. Write something genuinely different — a different angle, not a synonym swap.`,
     );
   }
 

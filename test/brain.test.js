@@ -106,21 +106,37 @@ test('a model line starting with a slash is never sent as a command', async () =
   assert.equal(said[0].command, 'ban Dream');
 });
 
-test('falls back to canned lines when the API fails', async () => {
+test('stays silent when the API fails, rather than sending a stock line', async () => {
   const ai = createChatAI({
     username: 'Technoblade',
     client: mockClient(new Error('503 overloaded')),
   });
   const said = [];
   const errors = [];
+  const skipped = [];
   ai.on('say', (a) => said.push(a));
   ai.on('error', (e) => errors.push(e));
+  ai.on('skip', (s) => skipped.push(s));
 
   for (const event of griefScript()) await ai.handle(event);
   assert.equal(errors.length, 1);
+  assert.equal(said.length, 0, 'a canned line here is the exact tell we are avoiding');
+  assert.match(skipped.at(-1).reason, /stayed quiet: 503 overloaded/);
+});
+
+test('canned lines are available, but only when explicitly asked for', async () => {
+  const ai = createChatAI({
+    username: 'Technoblade',
+    llm: { fallbackOnError: true },
+    client: mockClient(new Error('503 overloaded')),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  ai.on('error', () => {});
+
+  for (const event of griefScript()) await ai.handle(event);
   assert.equal(said.length, 1);
   assert.equal(said[0].source, 'fallback');
-  assert.match(said[0].message, /^Dream/);
 });
 
 test('dry run decides but never queues anything', async () => {
@@ -248,4 +264,98 @@ test('the prompt tells the model it is being macro checked while ghost grinding'
   assert.match(capture.params.system[0].text, /macro checks/);
   assert.match(capture.params.messages[0].content, /macro check/);
   assert.match(capture.params.messages[0].content, /Tone: mildly annoyed/);
+});
+
+test('a near-repeat is rewritten, not sent', async () => {
+  const replies = [
+    'dream move out of my path',
+    'dream move out my path',        // a reword — must be caught
+    'been at this since 4am, you are not the first to check',
+  ];
+  let call = 0;
+  const prompts = [];
+  const ai = createChatAI({
+    username: '3172',
+    random: () => 0,
+    limits: { globalCooldownMs: 0 },
+    client: {
+      messages: {
+        async create(params) {
+          prompts.push(params.messages[0].content);
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: replies[call++], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 1.5 }] });
+  for (let i = 0; i < 4; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'xX_DreamSlayer_Xx', distance: 1.4 } });
+  }
+
+  assert.deepEqual(said.map((a) => a.message), [
+    'dream move out of my path',
+    'been at this since 4am, you are not the first to check',
+  ]);
+  assert.equal(call, 3, 'the reword cost one extra call');
+  assert.match(prompts[2], /too close to something above/);
+});
+
+test('the model is shown what it already said', async () => {
+  const prompts = [];
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    random: () => 0,
+    limits: { globalCooldownMs: 0 },
+    client: {
+      messages: {
+        async create(params) {
+          prompts.push(params.messages[0].content);
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: `line ${call++} about ghosts and mist`, reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Checker', distance: 1.5 }] });
+  for (let i = 0; i < 4; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Checker', distance: 1.4 } });
+  }
+
+  assert.doesNotMatch(prompts[0], /already said these/i, 'nothing to avoid on the first line');
+  assert.match(prompts[1], /You have already said these/);
+  assert.match(prompts[1], /line 0 about ghosts and mist/);
+  assert.match(prompts[1], /Say something new or say nothing/);
+});
+
+test('typing delay scales with the length of what was typed', async () => {
+  const short = await delayFor('k');
+  const long = await delayFor('been grinding this since 4am mate, you are far from the first person to stand there');
+  assert.ok(long > short, `${long}ms should exceed ${short}ms`);
+  assert.ok(short >= 400, 'still pauses to read the room');
+  assert.ok(long <= 7000, 'but never stalls past the moment');
+
+  async function delayFor(message) {
+    const ai = createChatAI({
+      username: '3172',
+      random: () => 0,
+      client: mockClient({ respond: true, message, reason: '' }),
+    });
+    const said = [];
+    ai.on('say', (a) => said.push(a));
+    await ai.handle({ type: 'players', nearby: [{ name: 'Checker', distance: 1.5 }] });
+    for (let i = 0; i < 3; i += 1) {
+      await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Checker', distance: 1.4 } });
+    }
+    return said[0].delayMs;
+  }
 });

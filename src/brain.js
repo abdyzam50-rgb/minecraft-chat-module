@@ -118,30 +118,44 @@ export class ChatAI extends EventEmitter {
       return null;
     }
 
-    let decision;
-    try {
-      decision = this.usingApi
-        ? await this.claude.decide(this.store, trigger, ts)
-        : this.fallback.decide(this.store, trigger);
-    } catch (error) {
-      this.emit('error', error);
-      if (!this.config.llm.fallbackOnError) return null;
-      decision = this.fallback.decide(this.store, trigger);
-    }
+    const avoid = this.policy.recent(this.config.limits.dedupeWindowMs)
+      .slice(0, this.config.chat.avoidHistory);
+    const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
+
+    let decision = await this.think(trigger, ts, { avoid });
+    if (!decision) return null;
 
     if (!decision.respond || !decision.message) {
       this.emit('skip', { trigger, reason: decision.reason || 'chose to stay quiet' });
       return null;
     }
 
-    const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
-    const clean = sanitize(decision.message, this.config, { shout });
+    let clean = sanitize(decision.message, this.config, { shout });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
     }
 
-    const final = this.policy.check(trigger, clean.message);
+    let final = this.policy.check(trigger, clean.message);
+
+    // A near-repeat is the single biggest tell. Give the model one more go with
+    // the rejected line in front of it before giving up and saying nothing.
+    if (!final.allowed && final.repeat && this.config.llm.retryOnRepeat && this.usingApi) {
+      this.emit('skip', { trigger, reason: `${final.reason} — rewriting` });
+      const retry = await this.think(trigger, ts, { avoid, rejected: clean.message });
+      if (retry?.respond && retry.message) {
+        const retryClean = sanitize(retry.message, this.config, { shout });
+        if (retryClean.ok) {
+          const retryCheck = this.policy.check(trigger, retryClean.message);
+          if (retryCheck.allowed) {
+            decision = retry;
+            clean = retryClean;
+            final = retryCheck;
+          }
+        }
+      }
+    }
+
     if (!final.allowed) {
       this.emit('skip', { trigger, reason: final.reason });
       return null;
@@ -159,7 +173,7 @@ export class ChatAI extends EventEmitter {
       anger: trigger.anger ?? null,
       reason: decision.reason,
       source: decision.source,
-      delayMs: randomDelay(this.config.chat.typingDelayMs),
+      delayMs: typingDelay(clean.message, this.config.chat),
       ts: Date.now(),
     };
 
@@ -176,6 +190,28 @@ export class ChatAI extends EventEmitter {
     return action;
   }
 
+  /**
+   * One attempt at a reply. Returns null when nothing should be said.
+   * @returns {Promise<{respond:boolean, message:string, reason:string, source:string}|null>}
+   */
+  async think(trigger, ts, options) {
+    if (!this.usingApi) {
+      return this.config.llm.fallbackOnError || !this.claude.available
+        ? this.fallback.decide(this.store, trigger)
+        : null;
+    }
+    try {
+      return await this.claude.decide(this.store, trigger, ts, options);
+    } catch (error) {
+      this.emit('error', error);
+      if (!this.config.llm.fallbackOnError) {
+        this.emit('skip', { trigger, reason: `stayed quiet: ${error.message}` });
+        return null;
+      }
+      return this.fallback.decide(this.store, trigger);
+    }
+  }
+
   /** Drain queued actions (used by the HTTP bridge). */
   drain() {
     const actions = this.outbox;
@@ -184,8 +220,20 @@ export class ChatAI extends EventEmitter {
   }
 }
 
-function randomDelay([min, max]) {
-  return Math.round(min + Math.random() * Math.max(0, max - min));
+/**
+ * How long a person would take to send this: a beat to read the room and
+ * decide, then time roughly proportional to what they typed. A flat random
+ * delay gives every message the same rhythm no matter its length, which reads
+ * as machinery the moment anyone watches for it.
+ */
+function typingDelay(message, chat) {
+  const think = pick(chat.thinkMs);
+  const perChar = pick(chat.msPerChar);
+  return Math.min(chat.maxDelayMs, Math.round(think + message.length * perChar));
+}
+
+function pick([min, max]) {
+  return min + Math.random() * Math.max(0, max - min);
 }
 
 export function createChatAI(options) {

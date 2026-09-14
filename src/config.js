@@ -17,13 +17,22 @@ export const DEFAULTS = {
 
   llm: {
     model: 'claude-opus-5',
-    /** low keeps in-game latency down; raise for wittier replies. */
-    effort: 'low',
+    /** medium buys noticeably less formulaic wording for ~a second of latency. */
+    effort: 'medium',
     maxTokens: 1000,
     /** Abort the request if it outlives the moment. */
-    timeoutMs: 8000,
-    /** Fall back to canned lines when the API errors or times out. */
-    fallbackOnError: true,
+    timeoutMs: 9000,
+    /**
+     * Ask again when the first line comes back too close to something already
+     * said. Costs one extra call, occasionally.
+     */
+    retryOnRepeat: true,
+    /**
+     * Canned lines when the API errors out. Off by default: a stock phrase is
+     * exactly the tell this bot exists to avoid, and saying nothing is what a
+     * person distracted by a grind would do anyway.
+     */
+    fallbackOnError: false,
   },
 
   chat: {
@@ -35,8 +44,20 @@ export const DEFAULTS = {
      * Note: no filter-evasion (l3etspeak) is performed in either mode.
      */
     profanity: 'clean',
-    /** Simulated typing delay before the message goes out. */
-    typingDelayMs: [600, 1800],
+    /**
+     * Typing is modelled, not randomised flat: a pause to read and decide,
+     * then time proportional to the length of what gets typed.
+     */
+    thinkMs: [400, 1400],
+    msPerChar: [45, 90],
+    maxDelayMs: 7000,
+    /**
+     * Reject a line this close to one already sent (0-1, trigram Dice).
+     * Lower is stricter. 0.55 rejects rewordings, keeps genuine variety.
+     */
+    similarityThreshold: 0.55,
+    /** How many recent lines the model is told to avoid repeating. */
+    avoidHistory: 8,
     /** Channels the bot is allowed to talk in. */
     speakIn: ['all', 'party'],
   },

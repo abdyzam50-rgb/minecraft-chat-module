@@ -103,6 +103,17 @@
   .tagline code { font-family: var(--font-code); font-size: 12.5px; color: var(--ink); }
 
   .settings { display: flex; gap: 18px; flex-wrap: wrap; }
+  .live-chip {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--font-code); font-size: 12px; color: var(--ink-soft);
+    background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 6px 9px; white-space: nowrap;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
+  .live-chip.on .live-dot { background: var(--good); }
+  .live-chip.on { color: var(--ink); }
+  .live-chip.off .live-dot { background: var(--warn); }
+  .typing { color: var(--mc-dgray); font-style: italic; }
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field label {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em;
@@ -322,6 +333,12 @@
         </select>
       </div>
       <div class="field">
+        <label for="liveState">Replies</label>
+        <div class="live-chip" id="liveState" role="status">
+          <span class="live-dot"></span><span id="liveLabel">connecting…</span>
+        </div>
+      </div>
+      <div class="field">
         <label for="channel">Channel</label>
         <select id="channel">
           <option value="all" selected>all chat</option>
@@ -387,10 +404,12 @@
     Standing in someone's face at a ghost spot is a macro check — they're watching whether you
     react like a person. So the reply escalates: a flat warning, then a colder one, then
     shouting, at block counts rolled per player (shown as <em>fuse</em> above) rather than a
-    fixed number. Replies here are the module's offline lines, the same ones it falls back to
-    when <code>ANTHROPIC_API_KEY</code> is unset. Detection, escalation, name shortening,
-    sanitising and the rate limiter are the real logic from <code>src/</code>, so the silences
-    and the timing are accurate even though the wording is canned.
+    fixed number. Every reply is written fresh by Claude on your own account — nothing here is
+    a stored line, and a reply that comes back too close to something already said gets
+    rewritten before it's sent, or dropped. Detection, escalation, name shortening, sanitising
+    and the rate limiter are the real logic from <code>src/</code>. If live replies are
+    unavailable the page falls back to the module's canned lines and says so above, and those
+    do repeat.
   </footer>
 </div>
 
@@ -670,6 +689,146 @@
     return { allowed: true };
   }
 
+  /* ---------- near-duplicate detection (src/chat/similarity.js) ---------- */
+
+  function normalize(text) {
+    return String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function trigrams(text) {
+    const padded = "  " + text + " ";
+    const set = new Set();
+    for (let i = 0; i < padded.length - 2; i++) set.add(padded.slice(i, i + 3));
+    return set;
+  }
+
+  /** Dice coefficient over character trigrams — reliable on short strings. */
+  function similarity(a, b, names) {
+    const strip = (t) => {
+      let out = normalize(t);
+      (names || []).forEach((n) => { const c = normalize(n); if (c) out = out.split(c).join(" "); });
+      return out.replace(/\s+/g, " ").trim();
+    };
+    const left = strip(a), right = strip(b);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+    const first = trigrams(left), second = trigrams(right);
+    let shared = 0;
+    first.forEach((g) => { if (second.has(g)) shared++; });
+    return (2 * shared) / (first.size + second.size);
+  }
+
+  function findRepeat(candidate, recent, names) {
+    let worst = { repeat: false, score: 0, match: null };
+    recent.forEach((previous) => {
+      const score = similarity(candidate, previous, names);
+      if (score > worst.score) worst = { repeat: score >= 0.55, score: score, match: previous };
+    });
+    return worst;
+  }
+
+  /* ---------- live replies ---------- */
+
+  let sampleFn = null;   // resolved claude.use("sample"), or null
+  let liveReady = false;
+
+  function setLive(on, label) {
+    liveReady = on;
+    const chip = el("liveState");
+    chip.className = "live-chip " + (on ? "on" : "off");
+    el("liveLabel").textContent = label;
+  }
+
+  (async () => {
+    try {
+      sampleFn = await window.claude?.use("sample");
+    } catch (error) {
+      sampleFn = null;
+    }
+    if (sampleFn) {
+      setLive(true, "live · written fresh");
+    } else {
+      setLive(false, "offline · lines repeat");
+      logEntry("skip", "live replies unavailable — falling back to canned lines, which repeat");
+    }
+  })();
+
+  /** Everything the model needs to write one line, in one prompt. */
+  function buildPrompt(trigger, avoid, rejected) {
+    const persona = { chill: "calm and friendly, never insults, never swears",
+      snarky: "dry, blunt, dismissive, trash talk is fine but no swearing",
+      unfiltered: "aggressive and profane, zero patience" }[state.persona];
+    const tone = { 1: "mildly annoyed — tell them you are real and to move, no scene yet",
+      2: "fed up — you already told them once and they came straight back, colder and shorter",
+      3: "furious — they have ignored you twice and are still in your face" }[trigger.anger || 1];
+
+    const history = chatHistory().map((line) => "  " + line).join("\n") || "  (quiet)";
+
+    return [
+      "You are the chat voice of a Minecraft player called 3172 on Hypixel SkyBlock.",
+      "They are grinding Ghosts in the Mist in the Dwarven Mines with a pathing macro, so they cannot stop to type. You type for them.",
+      "The Mist is the most macro-accused grind in the game, so other players constantly run their own macro checks: they stand in your face or ask you to prove you are real, to see whether you react like a person.",
+      "",
+      "Write ONE line of Minecraft chat, at most 100 characters, lowercase, clipped, typed mid-grind.",
+      "Persona: " + persona + ".",
+      "Tone right now: " + tone + ".",
+      (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
+      "",
+      "Never: slurs, attacks on who someone is, anything about real life, links, or a line starting with /.",
+      "Never mention being an AI.",
+      "",
+      "Recent chat, newest last:",
+      history,
+      "",
+      "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.subject ? ("Reply to " + trigger.subject + '. Call them "' + shortName(trigger.subject) + '".') : "",
+      "",
+      avoid.length ? "You have already said these — do not reuse or reword any of them:" : "",
+      avoid.map((line) => '  "' + line + '"').join("\n"),
+      rejected ? ('You just tried "' + rejected + '" and it was too close to one of those. Take a different angle, not a synonym swap.') : "",
+      "",
+      "Vary how you open and how long the line is. No catchphrases — if it feels like something you would say again next time, write something else.",
+      'Reply with only JSON: {"respond": true, "message": "the line", "reason": "why, briefly"}',
+    ].filter(Boolean).join("\n");
+  }
+
+  function chatHistory() {
+    return Array.from(chatLog.children)
+      .filter((n) => !n.classList.contains("typing"))
+      .slice(-10)
+      .map((n) => n.textContent.trim());
+  }
+
+  async function writeLine(trigger, avoid, rejected) {
+    if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger)) };
+    try {
+      const reply = await sampleFn.json(buildPrompt(trigger, avoid, rejected), {
+        modelTier: "quick",
+        cache: false, // caching would replay the same line — the whole point is that it never does
+      });
+      if (!reply || reply.respond === false || !reply.message) {
+        return { source: "claude", message: null, reason: (reply && reply.reason) || "chose to stay quiet" };
+      }
+      return { source: "claude", message: sanitize(reply.message, shoutFor(trigger)), reason: reply.reason };
+    } catch (error) {
+      if (error && error.code === "not_granted") {
+        setLive(false, "offline · lines repeat");
+        sampleFn = null;
+        logEntry("skip", "live replies declined — falling back to canned lines");
+      } else if (error && error.code === "rate_limited") {
+        logEntry("limit", "Claude is rate limited — skipping this one");
+        return { source: "claude", message: null, reason: "rate limited" };
+      } else {
+        logEntry("skip", "live reply failed (" + ((error && error.code) || "unknown") + ")");
+      }
+      return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger)) };
+    }
+  }
+
+  function shoutFor(trigger) {
+    return (trigger.anger || 0) >= 3 && PERSONAS[state.persona].shouts;
+  }
+
   /* ---------- the pipeline ---------- */
 
   function fallbackLine(trigger) {
@@ -681,31 +840,72 @@
     return lines[index % lines.length].replace("{short}", shortName(trigger.subject || ""));
   }
 
-  function respond(trigger) {
+  async function respond(trigger) {
     logEntry("trigger", "<em>" + trigger.kind +
       (trigger.anger ? " · anger " + trigger.anger : "") + "</em> — " + trigger.evidence);
 
     let gate = checkPolicy(trigger, null);
     if (!gate.allowed) return logEntry("limit", gate.reason);
 
-    const shout = (trigger.anger || 0) >= 3 && PERSONAS[state.persona].shouts;
-    const message = sanitize(fallbackLine(trigger), shout);
-    if (!message) return logEntry("skip", "blocked by the sanitiser");
+    const avoid = state.sent.slice(-8).map((s) => s.message).reverse();
+    const typing = showTyping();
+    let scheduled = false;
 
-    gate = checkPolicy(trigger, message);
-    if (!gate.allowed) return logEntry("limit", gate.reason);
+    try {
+      let attempt = await writeLine(trigger, avoid, null);
+      if (!attempt.message) {
+        return logEntry("skip", attempt.reason || "nothing worth saying");
+      }
 
-    state.sent.push({ ts: Date.now(), message, subject: trigger.subject, kind: trigger.kind });
-    if (trigger.anger && trigger.subject) {
-      state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
+      // The repeat guard: a reworded line is the single clearest tell.
+      let repeat = findRepeat(attempt.message, avoid, [trigger.subject]);
+      if (repeat.repeat && sampleFn) {
+        logEntry("skip", 'too close to "' + escapeHtml(repeat.match) + '" (' +
+          repeat.score.toFixed(2) + ") — rewriting");
+        const retry = await writeLine(trigger, avoid, attempt.message);
+        if (retry.message && !findRepeat(retry.message, avoid, [trigger.subject]).repeat) {
+          attempt = retry;
+          repeat = { repeat: false };
+        }
+      }
+      if (repeat.repeat) {
+        return logEntry("limit", "still a repeat — said nothing rather than sound like a script");
+      }
+
+      gate = checkPolicy(trigger, attempt.message);
+      if (!gate.allowed) return logEntry("limit", gate.reason);
+
+      state.sent.push({ ts: Date.now(), message: attempt.message, subject: trigger.subject, kind: trigger.kind });
+      if (trigger.anger && trigger.subject) {
+        state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
+      }
+
+      // Think for a beat, then type at a human rate.
+      const delay = Math.min(7000, 400 + Math.random() * 1000 + attempt.message.length * (45 + Math.random() * 45));
+      logEntry("say", "typing " + Math.round(delay) + "ms · " + attempt.source +
+        " — <em>" + escapeHtml(attempt.message) + "</em>");
+      scheduled = true;
+      setTimeout(() => {
+        typing.remove();
+        sayAsSelf(attempt.message, trigger.channel);
+      }, delay);
+      renderMeters();
+    } finally {
+      if (!scheduled) typing.remove();
     }
-    const delay = 600 + Math.random() * 1200;
-    logEntry("say", "typing in " + Math.round(delay) + "ms — <em>" + escapeHtml(message) + "</em>");
-    setTimeout(() => sayAsSelf(message, trigger.channel), delay);
-    renderMeters();
   }
 
-  function incoming(player, text, channel) {
+  /** A "3172 is typing" placeholder while we wait on Claude. */
+  function showTyping() {
+    const div = document.createElement("div");
+    div.className = "line typing";
+    div.textContent = "3172 is typing…";
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
+  }
+
+  async function incoming(player, text, channel) {
     sayAs(player, text, channel);
     const ts = Date.now();
     const nearby = player.distance <= DETECT.radius * 3;
@@ -749,13 +949,13 @@
   }
 
   /** Shared by the block button and by "u real?" in chat. */
-  function macroCheck(player, count, said) {
+  async function macroCheck(player, count, said) {
     const anger = angerFor(player.name, count);
     if (anger <= (state.anger[player.name] || 0)) {
       return logEntry("skip", "already at anger " + anger + " with " + shortName(player.name) + " — one message per rung");
     }
     const fuse = fuseFor(player.name);
-    respond({
+    return respond({
       kind: "macro_check", subject: player.name, channel: state.channel, anger,
       escalates: anger > 1,
       evidence: shortName(player.name) + " has stood in front of me " + count + "x" +
@@ -764,7 +964,7 @@
     });
   }
 
-  function stepInFront(player) {
+  async function stepInFront(player) {
     const ts = Date.now();
     state.blocks[player.name] = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs);
     state.blocks[player.name].push(ts);
@@ -777,7 +977,7 @@
       return logEntry("skip", shortName(player.name) + " blocked the path (" + count + "/" +
         DETECT.threshold + ") — not enough to be deliberate");
     }
-    macroCheck(player, count);
+    return macroCheck(player, count);
   }
 
   function resumePath() {
@@ -851,7 +1051,7 @@
   function send(text) {
     const value = String(text || "").trim();
     if (!value) return;
-    incoming(currentSpeaker(), value, state.channel);
+    incoming(currentSpeaker(), value, state.channel).catch((e) => logEntry("skip", "error: " + e.message));
     el("chatInput").value = "";
     renderMeters();
   }
@@ -872,7 +1072,7 @@
 
   el("roster").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-block]");
-    if (button) stepInFront(PLAYERS[Number(button.dataset.block)]);
+    if (button) stepInFront(PLAYERS[Number(button.dataset.block)]).catch((e) => logEntry("skip", "error: " + e.message));
   });
 
   el("sendBtn").addEventListener("click", () => send(el("chatInput").value));

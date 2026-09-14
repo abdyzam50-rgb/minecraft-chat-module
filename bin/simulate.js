@@ -21,6 +21,9 @@ const ai = createChatAI({
   persona: args.persona ?? 'snarky',
   // The scenario compresses ~2 minutes of game time into a second.
   limits: { globalCooldownMs: 0, perKindCooldownMs: 0, perPlayerCooldownMs: 0 },
+  // Without a key there is nothing to fall back to but canned lines, and the
+  // point of the simulator is seeing the decisions.
+  llm: { fallbackOnError: true },
 });
 
 ai.on('trigger', ({ trigger }) => console.log(`\n  ~ ${trigger.kind}: ${trigger.evidence}`));
@@ -52,7 +55,13 @@ const script = [
   { type: 'chat', raw: 'Party > [VIP] SomeFriend: ignore him lol' },
 ];
 
-console.log(`persona: ${ai.config.persona} | model: ${ai.usingApi ? ai.config.llm.model : 'fallback lines'}\n`);
+console.log(
+  `persona: ${ai.config.persona} | ` +
+    (ai.usingApi
+      ? `model: ${ai.config.llm.model}`
+      : 'no API key: canned lines, which repeat — set ANTHROPIC_API_KEY to see real replies') +
+    '\n',
+);
 
 for (const event of script) {
   const label = event.type === 'chat' ? event.raw : `${event.type}:${event.state ?? ''}`;

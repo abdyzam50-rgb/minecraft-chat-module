@@ -66,9 +66,10 @@ stay quiet.
 
 For a clickable version, open `web/chat-sandbox.html` in a browser — a fake
 Hypixel window where you can talk as another player, step in front of the
-pathfinder, and watch the limiter and decision log react. It runs the real
-detection, naming, sanitising and rate-limiting logic with the offline canned
-lines, so no key and no server are needed.
+pathfinder, and watch the limiter and decision log react. Published as an
+Artifact it writes every reply live through Claude on the viewer's own account,
+including the repeat guard rewriting a line that came back too similar; opened
+as a local file it falls back to the canned lines and says so.
 
 ### Hooking up the client
 
@@ -160,6 +161,48 @@ is a person doing it on purpose. All of it is in `config.detect`.
 After a trigger fires, the model still gets the final say on whether to speak —
 it returns `respond: false` for arguments that aren't worth continuing.
 
+## Never the same line twice
+
+A bot gives itself away by repeating, not by being wrong. Four things guard
+against it:
+
+**Canned lines are off by default.** `llm.fallbackOnError` is `false`, so when
+the API times out or errors the bot says *nothing*. A stock phrase is the exact
+tell this thing exists to avoid, and a person distracted by a grind going quiet
+for a minute is completely normal. The canned lines still exist for the offline
+simulator — turn them on with `llm: { fallbackOnError: true }` if you want them,
+knowing they repeat.
+
+**The model is shown what it already said.** Every request carries the last 8
+lines sent (`chat.avoidHistory`) with an instruction not to reuse, reword, or
+reach for the same joke twice.
+
+**Near-repeats are caught, not just exact ones.** `"move out of my path"` and
+`"move out my path"` are different strings and the same message. `src/chat/similarity.js`
+scores candidates against recent lines with a Dice coefficient over character
+trigrams, with the addressee's name stripped out so two lines to the same player
+stay comparable. Anything at or above `chat.similarityThreshold` (0.55) is a
+repeat — rewordings score 0.6–0.9, genuinely different lines score under 0.3.
+
+**A repeat gets one rewrite, then silence.** The rejected line goes back to the
+model with "you just tried this, take a different angle, not a synonym swap". If
+the second attempt is still too close, the bot says nothing rather than sound
+like a script.
+
+Note that `temperature` is not available on Claude Opus 5 — variety comes from
+the context and the avoid-list rather than sampling noise, which is the more
+reliable source anyway. Effort defaults to `medium`; `low` produces noticeably
+more formulaic phrasing.
+
+### Typing like a person
+
+Delay is modelled, not a flat random pause: a beat to read and decide
+(`chat.thinkMs`, 400–1400ms) plus time proportional to what gets typed
+(`chat.msPerChar`, 45–90ms), capped at `chat.maxDelayMs`. A flat random delay
+gives every message the same rhythm regardless of length, which reads as
+machinery the moment anyone watches for it. A one-word reply lands in under a
+second; a full sentence takes four or five.
+
 ## What stops it speaking
 
 Auto-chat is the fastest way to get muted, so the limiter is deliberately
@@ -168,7 +211,7 @@ strict (`src/chat/policy.js`):
 - 8s between any two messages, 4/minute, 30/hour
 - 60s before replying to the same player again
 - never more than 2 replies to the same person back-to-back
-- identical messages inside 5 minutes are dropped (Hypixel eats duplicates anyway)
+- messages too close to a recent one are dropped (see above)
 - a "you are muted" line in chat silences the bot for 15 minutes
 - anything starting with `/` gets its slash stripped — a model reply can never
   execute a command
@@ -256,9 +299,10 @@ ai.on('skip', ({ reason }) => console.log('stayed quiet:', reason));
 await ai.handle({ type: 'chat', raw: '[MVP+] Griefer: ur macroing' });
 ```
 
-Without `ANTHROPIC_API_KEY` it falls back to per-persona canned lines, so the
-detection and rate limiting stay testable offline. The same fallback catches
-API timeouts mid-game.
+Without `ANTHROPIC_API_KEY` it falls back to per-persona canned lines so the
+detection and rate limiting stay testable offline — but those lines repeat, so
+the fallback is off for API errors by default. Set `llm: { fallbackOnError: true }`
+if you would rather have a stock line than silence.
 
 ## Layout
 
@@ -266,6 +310,7 @@ API timeouts mid-game.
 src/chat/parse.js       Hypixel chat lines -> {sender, content, channel}
 src/chat/shortname.js   xX_DreamSlayer_Xx -> Dream; fuzzy mention matching
 src/chat/sanitize.js    strip slashes/links, soften profanity, fit the chat box
+src/chat/similarity.js  trigram near-duplicate detection, so it never repeats itself
 src/chat/policy.js      cooldowns, rate limits, dedupe, mute handling
 src/context/store.js    rolling world state: chat, players, pathfinder, incidents
 src/detect/             when something is worth reacting to, and how angry
@@ -284,6 +329,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-52 tests over name shortening, chat parsing, detector thresholds, the macro-check
-escalation ladder, the rate limiter, sanitisation, the bridge, and the full
+62 tests over name shortening, chat parsing, detector thresholds, the macro-check
+escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
+typing model, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

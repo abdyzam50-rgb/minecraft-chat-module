@@ -61,7 +61,8 @@ ai.on('skip', ({ trigger, reason }) =>
 ai.on('error', (error) => console.error(`[error] ${error.message}`));
 
 if (!ai.usingApi) {
-  console.log('[mcchat] ANTHROPIC_API_KEY not set — running on canned fallback lines');
+  console.log('[mcchat] ANTHROPIC_API_KEY not set — falling back to canned lines.');
+  console.log('[mcchat] Those repeat. Set a key before using this anywhere real.');
 }
 console.log(`[mcchat] ${ai.config.username} / persona ${ai.config.persona}${ai.config.dryRun ? ' / DRY RUN' : ''}`);
 
