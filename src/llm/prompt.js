@@ -112,7 +112,7 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push(
       '',
       'This one is not testing you — they are just talking to you. Answer them properly, the way you would answer someone standing next to you at the same grind. Keep the attitude for people being deliberately annoying.',
-      'If they asked something, actually answer it before anything else.',
+      'If they asked something, actually answer it before anything else. Asked what you are doing? Say what you are doing — name the grind. A one-word deflection like "what" or "yeah?" is never the answer to a real question.',
     );
   }
 

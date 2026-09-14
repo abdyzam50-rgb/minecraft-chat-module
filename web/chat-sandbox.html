@@ -446,7 +446,7 @@
       },
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
-      mention: ["yeah?", "what's up"],
+      mention: ["just grinding ghosts, you?", "grinding ghosts in the mist, what's up"],
     },
     snarky: {
       shouts: true,
@@ -461,7 +461,7 @@
         "imagine calling consistency a hack",
       ],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
-      mention: ["what", "yeah?"],
+      mention: ["just grinding ghosts, same as yesterday", "grinding ghosts. you?"],
     },
     unfiltered: {
       shouts: true,
@@ -476,7 +476,7 @@
         "report me then, dipshit",
       ],
       hostile: ["piss off, it's a public lobby", "get lost"],
-      mention: ["what do you want", "what"],
+      mention: ["just grinding ghosts mate", "grinding ghosts, what do you want"],
     },
   };
 
@@ -781,6 +781,9 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      (trigger.kind === "mention" || trigger.kind === "whisper")
+        ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question.'
+        : "",
       trigger.subject ? ("Reply to " + trigger.subject + '. Call them "' + shortName(trigger.subject) + '".') : "",
       "",
       avoid.length ? "You have already said these — do not reuse or reword any of them:" : "",
@@ -1039,6 +1042,7 @@
     "macro check, say something if ur real",
     "u real?",
     "ur macroing arent you",
+    "what you upto 3172?",
     "hey 3172 nice cape",
     "reporting you for autoclicker",
     "anyone selling a bleeding heart",

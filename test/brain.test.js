@@ -393,3 +393,29 @@ test('a hostile mention keeps the attitude', async () => {
   const prompt = capture.params.messages[0].content;
   assert.doesNotMatch(prompt, /not testing you/, 'the friendly framing must not leak onto an accusation');
 });
+
+test('no persona answers a question with a one-word grunt', async () => {
+  for (const persona of ['chill', 'snarky', 'unfiltered']) {
+    const ai = createChatAI({ username: '3172', persona, llm: { fallbackOnError: true } });
+    const said = [];
+    ai.on('say', (a) => said.push(a));
+    await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 9 }] });
+    await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
+
+    assert.equal(said.length, 1, `${persona} should answer`);
+    assert.match(said[0].message, /grinding/, `${persona} should say what it is doing, got "${said[0].message}"`);
+    assert.ok(said[0].message.split(/\s+/).length >= 3, `${persona} gave a grunt: "${said[0].message}"`);
+  }
+});
+
+test('the model is told to name the grind rather than deflect', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'just grinding ghosts, you?', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 9 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
+
+  assert.match(capture.params.messages[0].content, /name the grind/);
+});
