@@ -56,6 +56,12 @@ export const DEFAULTS = {
     dedupeWindowMs: 300000,
   },
 
+  /** What the client is actually doing — fed to the model as context. */
+  self: {
+    area: 'The Mist, Dwarven Mines',
+    activity: 'ghost grinding',
+  },
+
   detect: {
     pathfinder: {
       /** Blocking incidents needed inside `windowMs` before we say anything. */
@@ -63,6 +69,16 @@ export const DEFAULTS = {
       windowMs: 45000,
       /** How close a player must be to count as "in the way" (blocks). */
       radius: 4,
+      /**
+       * Standing in front of someone at a grind spot is a macro check: they
+       * are watching whether you react like a person. Both numbers below are
+       * rolled per player, so the bot never snaps on a fixed count.
+       *
+       * patience — total blocks before the tone hardens (anger 2)
+       * rage     — extra blocks after that before it starts yelling (anger 3)
+       */
+      patience: [4, 7],
+      rage: [2, 4],
     },
     accusation: {
       /** Only fire if the accuser is nearby, mentioned us, or just talked to us. */

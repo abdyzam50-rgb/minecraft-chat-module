@@ -43,14 +43,28 @@ export class Policy {
     const hour = this.sent.filter((s) => ts - s.ts <= 3600000).length;
     if (hour >= L.maxPerHour) return { allowed: false, reason: 'per-hour limit' };
 
+    // An escalating reply continues an exchange we already started. The
+    // per-player and per-kind cooldowns exist to stop the bot nagging the same
+    // person about a new thing — they are the wrong brake here, since a whole
+    // macro check plays out inside one 60s window and the bot would fall silent
+    // exactly when it was meant to lose its temper.
+    //
+    // What still bounds it: the global cooldown between messages, the per
+    // minute and per hour caps, and the consecutive cap below — three replies
+    // to one player and it stops, no matter how long they keep standing there.
+    const escalating = Boolean(trigger.escalates);
+    const kindCooldown = escalating ? 0 : L.perKindCooldownMs;
+    const playerCooldown = escalating ? 0 : L.perPlayerCooldownMs;
+    const consecutiveCap = L.maxConsecutivePerPlayer + (escalating ? 1 : 0);
+
     const sameKind = [...this.sent].reverse().find((s) => s.kind === trigger.kind);
-    if (sameKind && ts - sameKind.ts < L.perKindCooldownMs) {
+    if (sameKind && ts - sameKind.ts < kindCooldown) {
       return { allowed: false, reason: `cooldown for ${trigger.kind}` };
     }
 
     if (trigger.subject) {
       const samePlayer = [...this.sent].reverse().find((s) => s.subject === trigger.subject);
-      if (samePlayer && ts - samePlayer.ts < L.perPlayerCooldownMs) {
+      if (samePlayer && ts - samePlayer.ts < playerCooldown) {
         return { allowed: false, reason: `cooldown for ${trigger.subject}` };
       }
 
@@ -59,7 +73,7 @@ export class Policy {
         if (this.sent[i].subject !== trigger.subject) break;
         streak += 1;
       }
-      if (streak >= L.maxConsecutivePerPlayer) {
+      if (streak >= consecutiveCap) {
         return { allowed: false, reason: `already replied to ${trigger.subject} ${streak}x in a row` };
       }
     }

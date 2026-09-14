@@ -13,13 +13,16 @@ export class FallbackResponder {
 
   decide(store, trigger) {
     const persona = getPersona(this.config.persona);
-    const lines = persona.fallback[trigger.kind] ?? persona.fallback.mention ?? [];
+    const entry = persona.fallback[trigger.kind] ?? persona.fallback.mention ?? [];
+    // Some kinds escalate, and store their lines keyed by anger level.
+    const lines = Array.isArray(entry) ? entry : entry[trigger.anger ?? 1] ?? entry[1] ?? [];
     if (!lines.length) {
       return { respond: false, message: '', reason: 'no fallback line', source: 'fallback' };
     }
 
-    const index = (this.used.get(trigger.kind) ?? -1) + 1;
-    this.used.set(trigger.kind, index);
+    const key = `${trigger.kind}:${trigger.anger ?? 1}`;
+    const index = (this.used.get(key) ?? -1) + 1;
+    this.used.set(key, index);
 
     const short = trigger.subject
       ? shortName(trigger.subject, { overrides: this.config.shortNames })
@@ -29,6 +32,11 @@ export class FallbackResponder {
       .replaceAll('{name}', trigger.subject ?? '')
       .trim();
 
-    return { respond: true, message, reason: 'canned line', source: 'fallback' };
+    return {
+      respond: true,
+      message,
+      reason: `canned line${trigger.anger ? `, anger ${trigger.anger}` : ''}`,
+      source: 'fallback',
+    };
   }
 }

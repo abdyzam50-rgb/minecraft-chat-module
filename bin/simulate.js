@@ -30,15 +30,24 @@ ai.on('error', (e) => console.log(`  !! ${e.message}`));
 
 const GRIEFER = 'xX_DreamSlayer_Xx';
 
+// A macro check as it actually plays out in the Mist: they plant themselves in
+// your face, keep doing it, and narrate the whole thing in chat.
+const block = { type: 'pathfinder', state: 'blocked', blockedBy: { name: GRIEFER, distance: 1.4 } };
+
 const script = [
-  { type: 'self', username: ai.config.username, area: 'Dwarven Mines', activity: 'mining mithril' },
+  { type: 'self', username: ai.config.username, area: 'The Mist, Dwarven Mines', activity: 'ghost grinding' },
   { type: 'players', nearby: [{ name: GRIEFER, distance: 2.1 }] },
-  { type: 'pathfinder', state: 'running', target: 'mithril vein' },
-  { type: 'pathfinder', state: 'blocked', blockedBy: { name: GRIEFER, distance: 1.8 } },
-  { type: 'pathfinder', state: 'blocked', blockedBy: { name: GRIEFER, distance: 1.4 } },
-  { type: 'pathfinder', state: 'blocked', blockedBy: { name: GRIEFER, distance: 1.2 } },
+  { type: 'pathfinder', state: 'running', target: 'ghost spawn' },
+  block,
+  block,
+  block,
   { type: 'chat', raw: `[MVP+] ${GRIEFER}: lol why arent you moving` },
+  block,
+  { type: 'chat', raw: `[MVP+] ${GRIEFER}: macro check, say something if ur real` },
+  block,
+  block,
   { type: 'chat', raw: `[MVP+] ${GRIEFER}: ur macroing arent you` },
+  block,
   { type: 'chat', raw: `[MVP+] ${GRIEFER}: im reporting you for macroing cheater` },
   { type: 'chat', raw: 'Party > [VIP] SomeFriend: ignore him lol' },
 ];

@@ -1,4 +1,4 @@
-import { getPersona, HARD_RULES } from '../persona/personas.js';
+import { getPersona, GRIND_CONTEXT, HARD_RULES } from '../persona/personas.js';
 import { shortName } from '../chat/shortname.js';
 
 /**
@@ -12,8 +12,11 @@ export function buildSystemPrompt(config) {
 
   return [
     `You are the chat voice of a Minecraft player called ${config.username} (people call them "${self}").`,
-    'They are grinding on Hypixel Skyblock with a pathfinding macro running, so they cannot stop to type.',
+    'They cannot stop to type, so you type for them.',
     'You write the single line they would have typed, and nothing else.',
+    '',
+    'Where you are:',
+    ...GRIND_CONTEXT.map((line) => `- ${line}`),
     '',
     'How you write:',
     `- At most ${config.chat.maxLength} characters. One line. No line breaks.`,
@@ -92,6 +95,14 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now()) {
   if (trigger.subject) {
     lines.push('', `Reply to ${trigger.subject}. Call them "${subjectShort}".`);
   }
+
+  if (trigger.anger) {
+    const persona = getPersona(config.persona);
+    lines.push('', ANGER[trigger.anger] ?? ANGER[1]);
+    if (trigger.anger >= 3 && persona.shouts) {
+      lines.push('Yell it. Write the whole line in capitals — you are shouting, not talking.');
+    }
+  }
   if (store.lastOutgoing && ts - store.lastOutgoing.ts < 120000) {
     lines.push(
       '',
@@ -103,6 +114,13 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now()) {
   lines.push('', 'Write the one line to send, or decide to stay quiet.');
   return lines.join('\n');
 }
+
+/** How the reply should land at each rung of the escalation. */
+const ANGER = {
+  1: 'Tone: mildly annoyed. Tell them you are real and to move. Do not make a scene about it yet.',
+  2: 'Tone: fed up. You have already told them once and they came straight back. Shorter, colder, no politeness left.',
+  3: 'Tone: furious. They have ignored you twice and are still stood in your face. Let them have it.',
+};
 
 export const RESPONSE_SCHEMA = {
   type: 'object',

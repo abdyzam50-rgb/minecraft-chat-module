@@ -3,13 +3,18 @@
 An in-game chat AI that actually knows what's going on around you.
 
 It watches your chat, who's nearby, and what your pathfinder is doing. When
-someone keeps stepping in front of your macro, it calls them out by the short
-form of their name. When someone starts with *"you're cheating, you're
-macroing"*, it answers them in your voice instead of yours.
+someone plants themselves in front of you at a ghost spot to macro check you,
+it tells them to move — and if they keep at it, it stops being polite.
 
 ```
-[pathfinder] blocked by xX_DreamSlayer_Xx (3rd time in 45s)
-  >> dream you've walked into my path 3 times now, move
+[macro_check · anger 1] Dream has stood in front of me 3x in 45s
+  >> dream yes im real, macro check over, move
+
+[macro_check · anger 2] ...and came straight back
+  >> dream ive answered you twice, im real, go away
+
+[macro_check · anger 3] ...still there after being told twice
+  >> DREAM MOVE. IM REAL. YOUVE BEEN IN MY FACE FOR TWO MINUTES.
 
 [chat] [MVP+] xX_DreamSlayer_Xx: ur macroing im reporting you
   >> not macroing, you've just never seen someone play for more than 10 minutes
@@ -103,11 +108,47 @@ attach(bot, createChatAI({ username: 'Tester', persona: 'snarky' }));
 
 Good for tuning personas on a private server before pointing it at Hypixel.
 
+## Macro checks
+
+The Mist is the most macro-accused grind in the game — ghost macroers really do
+run it around the clock — so players constantly run their own checks: they stand
+in your face, block your path, or type *"u real?"* to see whether you react like
+a person. A macro doesn't. That's the whole test.
+
+So a repeat blocker isn't treated as a griefer who needs telling once. The reply
+climbs a ladder, one message per rung:
+
+| Anger | When | Sounds like (snarky) |
+|---|---|---|
+| 1 | 3 blocks in 45s | "dream yes im real, macro check over, move" |
+| 2 | `patience` blocks | "dream ive answered you twice, im real, go away" |
+| 3 | `rage` blocks after that | "DREAM MOVE. IM REAL. YOUVE BEEN IN MY FACE FOR TWO MINUTES." |
+
+**Both counts are rolled per player, per session** (`detect.pathfinder.patience`
+and `.rage`, default 4–7 then +2–4). Snapping on exactly the third block every
+single time is itself a detectable pattern, and a macro check is precisely the
+moment somebody is watching for one — so there isn't a fixed number to learn.
+The polite rung is never skipped, however the roll lands.
+
+Anger 3 is shouted in caps by the `snarky` and `unfiltered` personas. `chill`
+still escalates, but stays in lowercase — it has `shouts: false`.
+
+Verbal checks count too: *"macro check"*, *"u real?"*, *"say something"*,
+*"react"*, *"hit me if ur not macroing"* all push the same ladder when they come
+from someone standing near you, and they take precedence over the accusation
+handler when both match.
+
+Each rung speaks once. Repeating a rung would burn the message budget the next
+one needs, so an escalating reply also steps past the per-player cooldown — a
+whole macro check plays out inside one 60-second window, and the bot going quiet
+mid-argument reads worse than never speaking. Three messages to one player is
+still the hard ceiling.
+
 ## What makes it speak
 
 | Trigger | Fires when |
 |---|---|
-| `pathfinder_blocked` | The same player blocks your path 3× in 45s **and** is still standing within 4 blocks |
+| `macro_check` | The same player blocks your path 3× in 45s **and** is still within 4 blocks — then escalates as above |
 | `accusation` | Someone says cheat/hack/macro/bot/report **and** it's aimed at you — your name, nearby, blocking you, or replying to your last line |
 | `hostile` | "move", "get out", "my spot" from someone next to you |
 | `mention` / `whisper` | Your name or short form appears, or someone whispers you |
@@ -140,7 +181,7 @@ Start there.
 
 | Persona | Sounds like |
 |---|---|
-| `chill` | "dream, mind moving? you keep walking into my path" |
+| `chill` | "dream im real, you can stop standing in my path" — never shouts |
 | `snarky` *(default)* | "dream standing in my path isn't a personality, move" |
 | `unfiltered` | swears, exactly like your example |
 
@@ -182,7 +223,7 @@ Events:
 { "type": "chat",       "raw": "[MVP+] Notch: ur macroing" }
 { "type": "pathfinder", "state": "blocked", "blockedBy": { "name": "Notch", "distance": 1.4 } }
 { "type": "players",    "nearby": [{ "name": "Notch", "distance": 2.3 }] }
-{ "type": "self",       "area": "Dwarven Mines", "activity": "mining mithril" }
+{ "type": "self",       "area": "The Mist, Dwarven Mines", "activity": "ghost grinding" }
 { "type": "sent",       "message": "what you just typed yourself" }
 ```
 
@@ -227,7 +268,7 @@ src/chat/shortname.js   xX_DreamSlayer_Xx -> Dream; fuzzy mention matching
 src/chat/sanitize.js    strip slashes/links, soften profanity, fit the chat box
 src/chat/policy.js      cooldowns, rate limits, dedupe, mute handling
 src/context/store.js    rolling world state: chat, players, pathfinder, incidents
-src/detect/             when something is worth reacting to
+src/detect/             when something is worth reacting to, and how angry
 src/llm/prompt.js       system prompt (cached) + per-event context
 src/llm/claude.js       the one API call, structured JSON out
 src/brain.js            wires it together, emits 'say' / 'skip'
@@ -243,6 +284,6 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-44 tests over name shortening, chat parsing, detector thresholds, the rate
-limiter, sanitisation, the bridge, and the full event→reply path with a mocked
-API client. No test hits the network.
+52 tests over name shortening, chat parsing, detector thresholds, the macro-check
+escalation ladder, the rate limiter, sanitisation, the bridge, and the full
+event→reply path with a mocked API client. No test hits the network.

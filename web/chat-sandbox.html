@@ -300,9 +300,9 @@
     <div>
       <h1>Hypixel Chat Sandbox</h1>
       <p class="tagline">
-        Provoke the bot without logging in. Talk as another player, walk in front of the
-        pathfinder, and watch every decision <code>3172</code> makes — including the ones
-        where it deliberately says nothing.
+        Macro-check the bot without logging in. Stand in <code>3172</code>'s face while it
+        grinds ghosts, tell it to prove it's real, and watch the temper rise — the fuse is
+        re-rolled per player, so it never snaps on the same count twice.
       </p>
     </div>
     <div class="settings">
@@ -335,7 +335,7 @@
     <section class="game" aria-label="Minecraft window">
       <div class="hud">
         <div class="hud-top">
-          <span class="area">⛏ Dwarven Mines — mining mithril</span>
+          <span class="area">👻 The Mist, Dwarven Mines — ghost grinding</span>
           <span class="path-state">
             <span class="dot" id="pathDot"></span>
             <span id="pathText">pathfinder: running</span>
@@ -384,10 +384,13 @@
   </main>
 
   <footer>
-    Replies here come from the module's built-in offline lines — the same ones it falls back to
-    when <code>ANTHROPIC_API_KEY</code> is unset or the API times out mid-grind. Detection,
-    name shortening, sanitising and the rate limiter are the real logic from
-    <code>src/</code>, so the silences are accurate even though the wording is canned.
+    Standing in someone's face at a ghost spot is a macro check — they're watching whether you
+    react like a person. So the reply escalates: a flat warning, then a colder one, then
+    shouting, at block counts rolled per player (shown as <em>fuse</em> above) rather than a
+    fixed number. Replies here are the module's offline lines, the same ones it falls back to
+    when <code>ANTHROPIC_API_KEY</code> is unset. Detection, escalation, name shortening,
+    sanitising and the rate limiter are the real logic from <code>src/</code>, so the silences
+    and the timing are accurate even though the wording is canned.
   </footer>
 </div>
 
@@ -416,17 +419,23 @@
 
   const PERSONAS = {
     chill: {
-      pathfinder_blocked: ["{short} you keep walking into my path, mind moving?", "{short} could you give me a bit of room?"],
+      shouts: false,
+      macro_check: {
+        1: ["{short} im real, you can stop standing in my path", "{short} mind moving? im not a macro"],
+        2: ["{short} thats twice now, im real, please move", "{short} ive answered you, can you move on"],
+        3: ["{short} thats enough, go stand somewhere else", "{short} please stop, ive been polite about this"],
+      },
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
       mention: ["yeah?", "what's up"],
     },
     snarky: {
-      pathfinder_blocked: [
-        "{short} standing in my path isn't a personality, move",
-        "{short} third time now. thrilling. move.",
-        "{short} you can walk literally anywhere else",
-      ],
+      shouts: true,
+      macro_check: {
+        1: ["{short} yes im real, macro check over, move", "{short} standing in my path isn't a personality, move"],
+        2: ["{short} ive answered you twice, im real, go away", "{short} youve been stood there a full minute. thrilling. move."],
+        3: ["{short} move. im real. youve been in my face for two minutes.", "{short} im not a macro and youre not a mod. move."],
+      },
       accusation: [
         "not macroing, you've just never seen someone play for more than 10 minutes",
         "report me then, i'll wait",
@@ -436,11 +445,12 @@
       mention: ["what", "yeah?"],
     },
     unfiltered: {
-      pathfinder_blocked: [
-        "{short} get the hell out of my path",
-        "{short} move. seriously. every damn time.",
-        "{short} i swear if you step in front of me one more time",
-      ],
+      shouts: true,
+      macro_check: {
+        1: ["{short} im real, get the hell out of my path", "{short} macro check's over, move"],
+        2: ["{short} move. seriously. ive told you twice.", "{short} im not a macro, now piss off"],
+        3: ["{short} get out of my face you absolute muppet, im not a macro", "{short} move. right now. ive had enough of you."],
+      },
       accusation: [
         "i'm not cheating you muppet, go touch grass",
         "not macroing, you're just bad at this game",
@@ -492,8 +502,9 @@
 
   const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
   const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
+  const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
-  const DETECT = { threshold: 3, windowMs: 45000, radius: 4 };
+  const DETECT = { threshold: 3, windowMs: 45000, radius: 4, patience: [4, 7], rage: [2, 4] };
   const LIMITS = {
     globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
     maxPerMinute: 4, maxConsecutivePerPlayer: 2, dedupeWindowMs: 300000,
@@ -508,11 +519,12 @@
     [/\bdamn\b/gi, "darn"], [/\bhell\b/gi, "heck"], [/\bpiss\s?off\b/gi, "buzz off"],
   ];
 
-  function sanitize(raw) {
+  function sanitize(raw, shout) {
     let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
     if (!text) return null;
     if (/https?:\/\/|discord\.gg\//i.test(text)) return null;
     if (state.profanity === "clean") for (const [p, r] of SOFTEN) text = text.replace(p, r);
+    if (shout) text = text.toUpperCase().replace(/!{2,}/g, "!");
     if (text.length > 100) {
       const cut = text.slice(0, 100);
       const space = cut.lastIndexOf(" ");
@@ -528,6 +540,8 @@
     profanity: "clean",
     channel: "all",
     blocks: {},        // name -> [timestamps]
+    fuses: {},         // name -> {patience, rage} rolled on their first block
+    anger: {},         // name -> highest anger level already spent on them
     accusations: {},   // name -> count
     pathfinder: { state: "running", blockedBy: null },
     sent: [],          // {ts, message, subject, kind}
@@ -596,6 +610,28 @@
 
   /* ---------- rate limiter (src/chat/policy.js) ---------- */
 
+  /**
+   * Roll this player's fuse once, then keep it. Snapping on exactly the third
+   * block every time is itself a tell — and a macro check is the one moment
+   * someone is watching for a pattern.
+   */
+  function fuseFor(name) {
+    if (!state.fuses[name]) {
+      const patience = Math.max(DETECT.threshold + 1,
+        DETECT.patience[0] + Math.floor(Math.random() * (DETECT.patience[1] - DETECT.patience[0] + 1)));
+      const rage = patience + DETECT.rage[0] + Math.floor(Math.random() * (DETECT.rage[1] - DETECT.rage[0] + 1));
+      state.fuses[name] = { patience, rage };
+    }
+    return state.fuses[name];
+  }
+
+  function angerFor(name, count) {
+    const { patience, rage } = fuseFor(name);
+    if (count >= rage) return 3;
+    if (count >= patience) return 2;
+    return 1;
+  }
+
   function checkPolicy(trigger, message) {
     const ts = Date.now();
     const last = state.sent[state.sent.length - 1];
@@ -606,13 +642,17 @@
     if (state.sent.filter((s) => ts - s.ts <= 60000).length >= LIMITS.maxPerMinute) {
       return { allowed: false, reason: "per-minute limit reached" };
     }
+    // An escalating reply continues an exchange already under way, so the
+    // per-kind and per-player brakes step aside — a whole macro check happens
+    // inside one 60s window. The consecutive cap below still bounds it.
+    const escalating = Boolean(trigger.escalates);
     const sameKind = [...state.sent].reverse().find((s) => s.kind === trigger.kind);
-    if (sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
+    if (!escalating && sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
       return { allowed: false, reason: "cooldown for " + trigger.kind };
     }
     if (trigger.subject) {
       const samePlayer = [...state.sent].reverse().find((s) => s.subject === trigger.subject);
-      if (samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
+      if (!escalating && samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
         return { allowed: false, reason: "cooldown for " + shortName(trigger.subject) };
       }
       let streak = 0;
@@ -620,7 +660,7 @@
         if (state.sent[i].subject !== trigger.subject) break;
         streak++;
       }
-      if (streak >= LIMITS.maxConsecutivePerPlayer) {
+      if (streak >= LIMITS.maxConsecutivePerPlayer + (escalating ? 1 : 0)) {
         return { allowed: false, reason: "already replied to " + shortName(trigger.subject) + " " + streak + "x in a row" };
       }
     }
@@ -633,25 +673,32 @@
   /* ---------- the pipeline ---------- */
 
   function fallbackLine(trigger) {
-    const lines = PERSONAS[state.persona][trigger.kind] || PERSONAS[state.persona].mention;
-    const index = (state.rotation[trigger.kind] || 0);
-    state.rotation[trigger.kind] = index + 1;
+    const entry = PERSONAS[state.persona][trigger.kind] || PERSONAS[state.persona].mention;
+    const lines = Array.isArray(entry) ? entry : entry[trigger.anger || 1];
+    const key = trigger.kind + ":" + (trigger.anger || 1);
+    const index = state.rotation[key] || 0;
+    state.rotation[key] = index + 1;
     return lines[index % lines.length].replace("{short}", shortName(trigger.subject || ""));
   }
 
   function respond(trigger) {
-    logEntry("trigger", "<em>" + trigger.kind + "</em> — " + trigger.evidence);
+    logEntry("trigger", "<em>" + trigger.kind +
+      (trigger.anger ? " · anger " + trigger.anger : "") + "</em> — " + trigger.evidence);
 
     let gate = checkPolicy(trigger, null);
     if (!gate.allowed) return logEntry("limit", gate.reason);
 
-    const message = sanitize(fallbackLine(trigger));
+    const shout = (trigger.anger || 0) >= 3 && PERSONAS[state.persona].shouts;
+    const message = sanitize(fallbackLine(trigger), shout);
     if (!message) return logEntry("skip", "blocked by the sanitiser");
 
     gate = checkPolicy(trigger, message);
     if (!gate.allowed) return logEntry("limit", gate.reason);
 
     state.sent.push({ ts: Date.now(), message, subject: trigger.subject, kind: trigger.kind });
+    if (trigger.anger && trigger.subject) {
+      state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
+    }
     const delay = 600 + Math.random() * 1200;
     logEntry("say", "typing in " + Math.round(delay) + "ms — <em>" + escapeHtml(message) + "</em>");
     setTimeout(() => sayAsSelf(message, trigger.channel), delay);
@@ -662,9 +709,18 @@
     sayAs(player, text, channel);
     const ts = Date.now();
     const nearby = player.distance <= DETECT.radius * 3;
+    const blockCount = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
+
+    // Most specific reading wins: "macro check, say something" matches the
+    // accusation pattern too, but answering it on the ladder is the better reply.
+    if (MACRO_CHECK_TALK.test(text) && (nearby || mentions(text, SELF))) {
+      state.blocks[player.name] = (state.blocks[player.name] || []).concat(ts);
+      renderRoster();
+      return macroCheck(player, Math.max(DETECT.threshold, blockCount + 1), text);
+    }
 
     if (ACCUSATION.test(text)) {
-      const blocking = (state.blocks[player.name] || []).some((t) => ts - t <= 120000);
+      const blocking = blockCount > 0;
       if (mentions(text, SELF) || nearby || blocking) {
         state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
         return respond({
@@ -692,6 +748,22 @@
     }
   }
 
+  /** Shared by the block button and by "u real?" in chat. */
+  function macroCheck(player, count, said) {
+    const anger = angerFor(player.name, count);
+    if (anger <= (state.anger[player.name] || 0)) {
+      return logEntry("skip", "already at anger " + anger + " with " + shortName(player.name) + " — one message per rung");
+    }
+    const fuse = fuseFor(player.name);
+    respond({
+      kind: "macro_check", subject: player.name, channel: state.channel, anger,
+      escalates: anger > 1,
+      evidence: shortName(player.name) + " has stood in front of me " + count + "x" +
+        (said ? ' and said "' + escapeHtml(said) + '"' : "") +
+        " — macro check. Fuse: harden at " + fuse.patience + ", yell at " + fuse.rage + ".",
+    });
+  }
+
   function stepInFront(player) {
     const ts = Date.now();
     state.blocks[player.name] = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs);
@@ -705,10 +777,7 @@
       return logEntry("skip", shortName(player.name) + " blocked the path (" + count + "/" +
         DETECT.threshold + ") — not enough to be deliberate");
     }
-    respond({
-      kind: "pathfinder_blocked", subject: player.name, channel: state.channel,
-      evidence: shortName(player.name) + " stepped in front " + count + "x in 45s, route keeps stopping",
-    });
+    macroCheck(player, count);
   }
 
   function resumePath() {
@@ -731,9 +800,12 @@
     const ts = Date.now();
     el("roster").innerHTML = PLAYERS.map((p, i) => {
       const blocks = (state.blocks[p.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
+      const fuse = state.fuses[p.name];
+      const meta = [p.distance.toFixed(1) + "m", "short: " + shortName(p.name)];
+      if (blocks) meta.push("blocked " + blocks + "x");
+      if (fuse) meta.push("fuse " + fuse.patience + "/" + fuse.rage);
       return '<div class="roster-row"><span class="roster-name">' + escapeHtml(p.name) +
-        '<br><span class="roster-meta">' + p.distance.toFixed(1) + "m · short: " + shortName(p.name) +
-        (blocks ? " · blocked " + blocks + "/3" : "") +
+        '<br><span class="roster-meta">' + meta.join(" · ") +
         '</span></span><button type="button" data-block="' + i + '">Step in front</button></div>';
     }).join("");
   }
@@ -764,11 +836,12 @@
   /* ---------- wiring ---------- */
 
   const PRESETS = [
+    "macro check, say something if ur real",
+    "u real?",
     "ur macroing arent you",
     "hey 3172 nice cape",
-    "move im mining here",
     "reporting you for autoclicker",
-    "anyone got extra mithril?",
+    "anyone selling a bleeding heart",
   ];
 
   function currentSpeaker() {
@@ -824,7 +897,8 @@
   });
 
   el("resetBtn").addEventListener("click", () => {
-    state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {}; state.log = [];
+    state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {};
+    state.log = []; state.fuses = {}; state.anger = {};
     state.pathfinder = { state: "running", blockedBy: null };
     chatLog.innerHTML = "";
     boot();
@@ -832,10 +906,11 @@
 
   function boot() {
     systemLine("You are playing on mc.hypixel.net — SkyBlock");
-    sayAs(PLAYERS[2], "anyone selling enchanted mithril", "all");
+    systemLine("The Mist is thick here. [Lv250] Ghost is nearby.");
+    sayAs(PLAYERS[2], "anyone selling a bleeding heart", "all");
     sayAs(PLAYERS[0], "lol why are you just standing there", "all");
     renderPathfinder(); renderRoster(); renderMeters(); renderLog();
-    logEntry("skip", "watching — nothing worth answering yet");
+    logEntry("skip", "watching — fuses roll on each player's first block");
   }
 
   boot();

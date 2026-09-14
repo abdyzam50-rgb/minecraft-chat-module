@@ -6,9 +6,9 @@ import { detectFromChat, detectPathfinderBlock, detectMuted } from '../src/detec
 
 const NOW = 1_700_000_000_000;
 
-function setup(overrides = {}) {
+function setup(overrides = {}, random = () => 0) {
   const config = resolveConfig({ username: 'Technoblade', ...overrides });
-  const store = new ContextStore({ now: () => NOW });
+  const store = new ContextStore({ now: () => NOW, random });
   store.updateSelf({ username: config.username });
   return { config, store };
 }
@@ -32,8 +32,9 @@ test('fires once someone blocks repeatedly', () => {
   store.updatePathfinder({ state: 'blocked', blockedBy: 'Griefer' }, NOW);
 
   const trigger = detectPathfinderBlock(store, config, NOW);
-  assert.equal(trigger.kind, 'pathfinder_blocked');
+  assert.equal(trigger.kind, 'macro_check');
   assert.equal(trigger.subject, 'Griefer');
+  assert.equal(trigger.anger, 1);
 });
 
 test('never targets an ignored player', () => {
@@ -81,4 +82,49 @@ test('answers whispers', () => {
 test('recognises a server mute notice', () => {
   assert.equal(detectMuted({ system: true, content: 'You are muted for 1h' }), true);
   assert.equal(detectMuted({ system: true, content: 'Welcome to Hypixel' }), false);
+});
+
+test('a macro check escalates: warn, then harden, then yell', () => {
+  // random() === 0 rolls the shortest fuse: patience 4, rage 6.
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+
+  const anger = [];
+  for (let i = 0; i < 7; i += 1) {
+    store.updatePathfinder({ state: 'blocked', blockedBy: 'Checker' }, NOW);
+    const trigger = detectPathfinderBlock(store, config, NOW);
+    anger.push(trigger ? trigger.anger : 0);
+  }
+  assert.deepEqual(anger, [0, 0, 1, 2, 2, 3, 3]);
+});
+
+test('the fuse is randomised per player, never a fixed count', () => {
+  const short = setup({}, () => 0);
+  const long = setup({}, () => 0.999);
+  const settings = short.config.detect.pathfinder;
+
+  assert.deepEqual(short.store.patienceFor('A', settings), { patience: 4, rage: 6 });
+  assert.deepEqual(long.store.patienceFor('A', settings), { patience: 7, rage: 11 });
+});
+
+test('the polite stage is never skipped, however the roll lands', () => {
+  for (const r of [0, 0.25, 0.5, 0.75, 0.999]) {
+    const { config, store } = setup({}, () => r);
+    const { patience } = store.patienceFor('A', config.detect.pathfinder);
+    assert.ok(patience > config.detect.pathfinder.threshold, `patience ${patience} must exceed the threshold`);
+  }
+});
+
+test('"u real?" counts as a macro check when they are next to us', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+  const trigger = detectFromChat(store, config, chat('Checker', 'u real?'), NOW);
+  assert.equal(trigger.kind, 'macro_check');
+  assert.match(trigger.evidence, /macro check/);
+});
+
+test('macro-check talk from across the lobby is ignored', () => {
+  const { config, store } = setup();
+  const trigger = detectFromChat(store, config, chat('Stranger', 'say something'), NOW);
+  assert.equal(trigger, null);
 });

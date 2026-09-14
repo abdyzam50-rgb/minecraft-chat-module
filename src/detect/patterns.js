@@ -22,6 +22,24 @@ export const ACCUSATION = new RegExp(
   'i',
 );
 
+/**
+ * Things people say while macro checking — standing in your face to see if you
+ * react like a human. Hitting any of these is as good as them blocking you.
+ */
+export const MACRO_CHECK_TALK = new RegExp(
+  [
+    '\\bmacro\\s?check',
+    '\\b(?:u|you|ur|are\\s?(?:u|you))\\s+(?:real|afk|alive|human|a\\s?bot)\\b',
+    '\\b(?:say|type|do)\\s+(?:something|smth|anything)\\b',
+    '\\b(?:react|respond)\\b',
+    '\\bhit\\s?me\\s?if\\b',
+    '\\bmove\\s?if\\s?(?:u|you|ur)\\b',
+    '\\bprove\\s+(?:u|you|ur|your)\\s*(?:re|r)?\\s*(?:not|human|real)\\b',
+    '\\bchecking\\s+(?:if|u|you)\\b',
+  ].join('|'),
+  'i',
+);
+
 /** Someone telling us to move / complaining about our pathing. */
 export const HOSTILE_NUDGE = new RegExp(
   ['get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away'].join('|'),

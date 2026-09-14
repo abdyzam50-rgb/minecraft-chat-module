@@ -41,7 +41,7 @@ test('repeated blocking produces a chat line aimed at the blocker', async () => 
   assert.equal(said.length, 1);
   assert.equal(said[0].message, 'dream move out of my path');
   assert.equal(said[0].subject, 'xX_DreamSlayer_Xx');
-  assert.equal(said[0].trigger, 'pathfinder_blocked');
+  assert.equal(said[0].trigger, 'macro_check');
   assert.equal(said[0].command, 'dream move out of my path');
 });
 
@@ -158,4 +158,94 @@ test('drain hands queued actions to the bridge exactly once', async () => {
   for (const event of griefScript()) await ai.handle(event);
   assert.equal(ai.drain().length, 1);
   assert.equal(ai.drain().length, 0);
+});
+
+test('a sustained macro check escalates to a shouted reply', async () => {
+  const replies = ['dream im real move', 'dream ive told you once already', 'dream move, im not a macro'];
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    random: () => 0, // shortest fuse: warn at 3, harden at 4, yell at 6
+    limits: { globalCooldownMs: 0 },
+    client: {
+      messages: {
+        async create() {
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: replies[Math.min(call++, 2)], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 1.5 }] });
+  for (let i = 0; i < 6; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'xX_DreamSlayer_Xx', distance: 1.4 } });
+  }
+
+  assert.deepEqual(said.map((a) => a.anger), [1, 2, 3]);
+  assert.equal(said[0].message, 'dream im real move');
+  assert.equal(said[2].message, 'DREAM MOVE, IM NOT A MACRO', 'anger 3 is shouted');
+});
+
+test('the chill persona hardens but never shouts', async () => {
+  // Distinct lines per rung — an identical repeat is dropped by the deduper.
+  const lines = ['im real, mind moving?', 'thats twice now, please move', 'please stop blocking me'];
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    persona: 'chill',
+    random: () => 0,
+    limits: { globalCooldownMs: 0 },
+    client: {
+      messages: {
+        async create() {
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: lines[Math.min(call++, 2)], reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'Checker', distance: 1.5 }] });
+  for (let i = 0; i < 6; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Checker', distance: 1.4 } });
+  }
+
+  const angriest = said.find((a) => a.anger === 3);
+  assert.ok(angriest, 'chill still escalates');
+  assert.equal(angriest.message, 'please stop blocking me', 'but not in capitals');
+});
+
+test('the prompt tells the model it is being macro checked while ghost grinding', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    random: () => 0,
+    client: {
+      messages: {
+        async create(params) {
+          capture.params = params;
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ respond: false, message: '', reason: 'quiet' }) }] };
+        },
+      },
+    },
+  });
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Checker', distance: 1.5 }] });
+  for (let i = 0; i < 3; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Checker', distance: 1.4 } });
+  }
+
+  assert.match(capture.params.system[0].text, /Ghosts in the Mist/);
+  assert.match(capture.params.system[0].text, /macro checks/);
+  assert.match(capture.params.messages[0].content, /macro check/);
+  assert.match(capture.params.messages[0].content, /Tone: mildly annoyed/);
 });

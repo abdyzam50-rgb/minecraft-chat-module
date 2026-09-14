@@ -7,6 +7,7 @@ import { Policy } from './chat/policy.js';
 import { ClaudeResponder } from './llm/claude.js';
 import { FallbackResponder } from './llm/fallback.js';
 import { detectFromChat, detectPathfinderBlock, detectMuted } from './detect/index.js';
+import { getPersona } from './persona/personas.js';
 
 /**
  * The brain: feed it game events, it emits chat messages to send.
@@ -21,10 +22,10 @@ export class ChatAI extends EventEmitter {
   constructor(options = {}) {
     super();
     // `client` is an SDK instance, not config — keep it out of the merge.
-    const { client, ...configOptions } = options;
+    const { client, random, ...configOptions } = options;
     this.config = resolveConfig(configOptions);
-    this.store = new ContextStore();
-    this.store.updateSelf({ username: this.config.username });
+    this.store = new ContextStore({ random });
+    this.store.updateSelf({ username: this.config.username, ...this.config.self });
     this.policy = new Policy(this.config);
     this.claude = new ClaudeResponder(this.config, { client });
     this.fallback = new FallbackResponder(this.config);
@@ -133,7 +134,8 @@ export class ChatAI extends EventEmitter {
       return null;
     }
 
-    const clean = sanitize(decision.message, this.config);
+    const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
+    const clean = sanitize(decision.message, this.config, { shout });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
@@ -154,6 +156,7 @@ export class ChatAI extends EventEmitter {
       target,
       trigger: trigger.kind,
       subject: trigger.subject,
+      anger: trigger.anger ?? null,
       reason: decision.reason,
       source: decision.source,
       delayMs: randomDelay(this.config.chat.typingDelayMs),
@@ -167,6 +170,7 @@ export class ChatAI extends EventEmitter {
 
     this.policy.record(trigger, clean.message);
     this.store.recordOutgoing(clean.message);
+    if (trigger.anger && trigger.subject) this.store.noteAnger(trigger.subject, trigger.anger);
     this.outbox.push(action);
     this.emit('say', action);
     return action;

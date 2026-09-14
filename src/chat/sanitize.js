@@ -27,9 +27,14 @@ const NEVER = [
 /**
  * Make a model-written line safe to actually type into Minecraft chat.
  *
+ * @param {string} raw
+ * @param {object} config
+ * @param {{shout?: boolean}} [options] shout uppercases the line last, after
+ *   profanity softening, so "fuck off" still becomes "FREAKING OFF" and not a
+ *   shouted swear you didn't ask for.
  * @returns {{ok: boolean, message: string, reason?: string}}
  */
-export function sanitize(raw, config) {
+export function sanitize(raw, config, options = {}) {
   let text = stripFormatting(String(raw ?? '')).replace(/[\r\n\t]+/g, ' ').trim();
   if (!text) return { ok: false, message: '', reason: 'empty' };
 
@@ -53,6 +58,11 @@ export function sanitize(raw, config) {
   // Minecraft only accepts a subset of characters in chat.
   text = text.replace(/[^ -~¡-ÿ]/g, '').replace(/\s{2,}/g, ' ').trim();
   if (!text) return { ok: false, message: '', reason: 'no sendable characters' };
+
+  if (options.shout) {
+    // Yelling is caps, not punctuation soup — a wall of "!!!" reads as a bot.
+    text = text.toUpperCase().replace(/!{2,}/g, '!');
+  }
 
   const max = config.chat.maxLength;
   if (text.length > max) {

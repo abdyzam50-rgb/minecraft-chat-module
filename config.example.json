@@ -3,6 +3,11 @@
   "aliases": [],
   "persona": "snarky",
 
+  "self": {
+    "area": "The Mist, Dwarven Mines",
+    "activity": "ghost grinding"
+  },
+
   "llm": {
     "model": "claude-opus-5",
     "effort": "low",
@@ -25,7 +30,13 @@
   },
 
   "detect": {
-    "pathfinder": { "threshold": 3, "windowMs": 45000, "radius": 4 },
+    "pathfinder": {
+      "threshold": 3,
+      "windowMs": 45000,
+      "radius": 4,
+      "patience": [4, 7],
+      "rage": [2, 4]
+    },
     "accusation": { "requireDirected": true },
     "mention": { "enabled": true, "answerWhispers": true }
   },

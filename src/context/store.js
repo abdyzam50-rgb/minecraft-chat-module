@@ -10,8 +10,9 @@ const CHAT_HISTORY = 40;
 const INCIDENT_HISTORY = 12;
 
 export class ContextStore {
-  constructor({ now = () => Date.now() } = {}) {
+  constructor({ now = () => Date.now(), random } = {}) {
     this.now = now;
+    this.random = random ?? Math.random;
 
     /** @type {{ts:number, sender:string|null, content:string, channel:string, system:boolean, raw:string}[]} */
     this.chat = [];
@@ -54,6 +55,11 @@ export class ContextStore {
         blocks: [],
         accusations: [],
         lastReplyTo: null,
+        /** Assigned on their first block — see patienceFor(). */
+        patience: null,
+        rage: null,
+        /** Highest anger level we have actually sent to this player. */
+        lastAnger: 0,
       });
     }
     return this.players.get(name);
@@ -99,11 +105,39 @@ export class ContextStore {
     }
   }
 
+  /**
+   * How many blocks we'll take from this player before the tone changes.
+   *
+   * Randomised per player, and per session: a bot that always snaps on the
+   * third block is itself a detectable pattern, and a macro check is exactly
+   * the moment someone is watching for one.
+   *
+   * @returns {{patience:number, rage:number}} block counts for anger 2 and 3
+   */
+  patienceFor(name, config) {
+    const p = this.player(name);
+    if (p.patience === null) {
+      const [pMin, pMax] = config.patience;
+      const [rMin, rMax] = config.rage;
+      // Always strictly above the threshold, so the calm first warning is
+      // never skipped no matter how the roll lands.
+      p.patience = Math.max(config.threshold + 1, pMin + Math.floor(this.random() * (pMax - pMin + 1)));
+      p.rage = p.patience + rMin + Math.floor(this.random() * (rMax - rMin + 1));
+    }
+    return { patience: p.patience, rage: p.rage };
+  }
+
   recordBlock(name, ts = this.now()) {
     const p = this.player(name);
     p.blocks.push(ts);
     p.lastSeen = ts;
     if (p.blocks.length > INCIDENT_HISTORY) p.blocks.shift();
+  }
+
+  /** Remember that a rung of the escalation has been spent on this player. */
+  noteAnger(name, anger) {
+    const p = this.player(name);
+    if (anger > p.lastAnger) p.lastAnger = anger;
   }
 
   recordAccusation(name, ts = this.now()) {
