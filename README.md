@@ -227,6 +227,44 @@ Dream: Mb G                       ->  all g
 Dream: cool cool                  ->  (nothing)
 ```
 
+### Slang
+
+`src/persona/slang.js` carries the vernacular, and it does two jobs. **Reading**:
+"u got any mf?" is a question about Magic Find, and a reply that misses that is
+worse than no reply at all. **Writing**: a player who types in full words while
+everyone around them writes "bz" and "ngl" reads as an outsider, which is
+halfway to reading as a bot.
+
+Roughly 30 pieces of general chat shorthand (mb, np, ngl, fr, tbh, ikr, wyd,
+wsg, ong, bet, no cap, sus, lowkey, mid, cracked, goated, W/L, rip, bruh, g,
+twin) and 35 SkyBlock terms (ah, bz, bin, flip, lowball, k/m/b, npc, insta-buy,
+mf, ms, hotm, powder, ch, div, scatha, the mist, sorrow/volta/plasma, cata,
+f1–f7, m1–m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term,
+gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg).
+
+The SkyBlock half is taken from the community abbreviation guides rather than
+invented — a bot using a term wrong is more obvious than one not using it at
+all. Add your own with `slang.extra`, as `["gexp — guild xp"]` or
+`[["gexp", "guild xp"]]`, and switch the whole thing off with
+`slang: { enabled: false }`.
+
+It's also told not to overdo it: nobody uses five pieces of slang in one line,
+and a bot trying to sound casual is more obvious than one being plain.
+
+### Two words means two words
+
+Some replies have to be tiny — a bare call-out, an acknowledgement. Asking the
+model nicely wasn't enough: told to answer "mb g" in two words it produced
+"all g dream, ty". So for `opener` and `smalltalk` triggers the limit is
+enforced after the fact — the addressee's name is stripped and the line is cut
+to `chat.terseWords` (2). Normal replies are untouched.
+
+```
+model wrote: "all g dream, ty"                          ->  all g
+model wrote: "lol all good bro, just farming ghosts"    ->  lol all
+model wrote: "been grinding since 4am dream" (normal)   ->  unchanged
+```
+
 ### Typing like a person
 
 Delay is modelled, not a flat random pause: a beat to read and decide
@@ -399,6 +437,7 @@ src/chat/parse.js       Hypixel chat lines -> {sender, content, channel}
 src/chat/shortname.js   xX_DreamSlayer_Xx -> Dream; fuzzy mention matching
 src/chat/sanitize.js    strip slashes/links, soften profanity, fit the chat box
 src/chat/similarity.js  trigram near-duplicate detection, so it never repeats itself
+src/persona/slang.js    chat and SkyBlock vernacular, for reading and writing
 src/chat/policy.js      cooldowns, rate limits, dedupe, mute handling
 src/context/store.js    rolling world state: chat, players, pathfinder, incidents
 src/detect/             when something is worth reacting to, and how angry
@@ -417,7 +456,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-86 tests over name shortening, chat parsing, detector thresholds, the macro-check
+90 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

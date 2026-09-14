@@ -1,4 +1,5 @@
 import { getPersona, GRIND_CONTEXT, HARD_RULES } from '../persona/personas.js';
+import { buildSlangSection } from '../persona/slang.js';
 import { shortName } from '../chat/shortname.js';
 
 /**
@@ -37,6 +38,8 @@ export function buildSystemPrompt(config) {
     '',
     `Tone (${persona.label}):`,
     ...persona.rules.map((r) => `- ${r}`),
+    '',
+    ...buildSlangSection(config),
     '',
     'Hard limits — these override tone:',
     ...HARD_RULES.map((r) => `- ${r}`),

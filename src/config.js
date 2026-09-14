@@ -45,6 +45,12 @@ export const DEFAULTS = {
      */
     preferredLength: 40,
     /**
+     * Hard word cap on replies that are meant to be tiny — a bare call-out or
+     * an acknowledgement. Enforced, not requested: the model keeps appending a
+     * name and a "ty" to what should be two words.
+     */
+    terseWords: 2,
+    /**
      * clean  — swap profanity for tamer words before sending
      * allow  — send whatever the model wrote
      * Note: no filter-evasion (l3etspeak) is performed in either mode.
@@ -149,6 +155,13 @@ export const DEFAULTS = {
       /** Answer whispers even when they don't include a question. */
       answerWhispers: true,
     },
+  },
+
+  /** Chat and SkyBlock vernacular — see src/persona/slang.js. */
+  slang: {
+    enabled: true,
+    /** Your own additions: ["gexp — guild xp"] or [["gexp", "guild xp"]]. */
+    extra: [],
   },
 
   /** Names that are never targeted or answered (friends, staff, your alts). */

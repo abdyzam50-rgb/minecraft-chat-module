@@ -124,6 +124,13 @@ export class ChatAI extends EventEmitter {
       .slice(0, this.config.chat.avoidHistory);
     const nameFatigue = this.nameFatigue(trigger);
     const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
+    // A bare call-out or an acknowledgement gets two words, no name, always.
+    const terse = (trigger.opener || trigger.smalltalk)
+      ? {
+          maxWords: this.config.chat.terseWords,
+          stripNames: [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })],
+        }
+      : {};
 
     let decision = await this.think(trigger, ts, { avoid, nameFatigue });
     if (!decision) return null;
@@ -133,7 +140,7 @@ export class ChatAI extends EventEmitter {
       return null;
     }
 
-    let clean = sanitize(decision.message, this.config, { shout });
+    let clean = sanitize(decision.message, this.config, { shout, ...terse });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
@@ -147,7 +154,7 @@ export class ChatAI extends EventEmitter {
       this.emit('skip', { trigger, reason: `${final.reason} — rewriting` });
       const retry = await this.think(trigger, ts, { avoid, nameFatigue, rejected: clean.message });
       if (retry?.respond && retry.message) {
-        const retryClean = sanitize(retry.message, this.config, { shout });
+        const retryClean = sanitize(retry.message, this.config, { shout, ...terse });
         if (retryClean.ok) {
           const retryCheck = this.policy.check(trigger, retryClean.message);
           if (retryCheck.allowed) {

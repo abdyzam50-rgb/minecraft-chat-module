@@ -769,3 +769,66 @@ test('a real question is never mistaken for filler', async () => {
 
   assert.doesNotMatch(capture.params.messages[0].content, /acknowledgement, not a question/);
 });
+
+test('a terse reply is cut down mechanically, name and all', async () => {
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    // What the model actually produced when asked for two words.
+    client: mockClient({ respond: true, message: 'all g dream, ty', reason: '' }),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172' });
+  clock += 7000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: Mb G' });
+
+  assert.equal(said.at(-1).message, 'all g');
+});
+
+test('a normal reply is left alone by the terse rules', async () => {
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'been grinding ghosts since about 4am dream', reason: '' }),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172 how long you been at it' });
+
+  assert.equal(said[0].message, 'been grinding ghosts since about 4am dream');
+});
+
+test('the prompt carries the slang it needs to read and write', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    slang: { extra: [['gexp', 'guild xp']] },
+    client: mockClient({ respond: true, message: 'in the bz', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 hows the mf looking' });
+
+  const system = capture.params.system[0].text;
+  for (const term of ['mf — magic find', 'bz / baz — bazaar', 'hotm — heart of the mountain', 'ngl', 'sorrow / volta / plasma']) {
+    assert.ok(system.includes(term), `missing "${term}"`);
+  }
+  assert.match(system, /gexp — guild xp/, 'user additions land too');
+  assert.match(system, /not crammed in/, 'and it is told not to overdo it');
+});
+
+test('slang can be switched off', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    slang: { enabled: false },
+    client: mockClient({ respond: true, message: 'ok', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 hi there mate' });
+
+  assert.doesNotMatch(capture.params.system[0].text, /bazaar/);
+});

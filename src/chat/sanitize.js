@@ -29,9 +29,12 @@ const NEVER = [
  *
  * @param {string} raw
  * @param {object} config
- * @param {{shout?: boolean}} [options] shout uppercases the line last, after
- *   profanity softening, so "fuck off" still becomes "FREAKING OFF" and not a
- *   shouted swear you didn't ask for.
+ * @param {{shout?: boolean, maxWords?: number, stripNames?: string[]}} [options]
+ *   shout uppercases the line last, after profanity softening, so "fuck off"
+ *   still becomes "FREAKING OFF" and not a shouted swear you didn't ask for.
+ *   maxWords and stripNames enforce brevity on replies that must be tiny —
+ *   the model keeps sneaking a name and an extra clause into a two-word
+ *   answer, and "all g dream, ty" reads as a script.
  * @returns {{ok: boolean, message: string, reason?: string}}
  */
 export function sanitize(raw, config, options = {}) {
@@ -58,6 +61,23 @@ export function sanitize(raw, config, options = {}) {
   // Minecraft only accepts a subset of characters in chat.
   text = text.replace(/[^ -~¡-ÿ]/g, '').replace(/\s{2,}/g, ' ').trim();
   if (!text) return { ok: false, message: '', reason: 'no sendable characters' };
+
+  if (options.stripNames?.length) {
+    for (const name of options.stripNames) {
+      if (!name || name.length < 2) continue;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      text = text.replace(new RegExp(`(^|[^a-z0-9_])${escaped}([^a-z0-9_]|$)`, 'gi'), '$1$2');
+    }
+    text = text.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
+  }
+
+  if (options.maxWords) {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length > options.maxWords) text = words.slice(0, options.maxWords).join(' ');
+  }
+
+  // Tidy up whatever the trimming left behind.
+  text = text.replace(/^[\s,;:.!?-]+/, '').replace(/[\s,;:-]+$/, '').trim();
 
   if (options.shout) {
     // Yelling is caps, not punctuation soup — a wall of "!!!" reads as a bot.
