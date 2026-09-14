@@ -65,16 +65,39 @@ export const DEFAULTS = {
   limits: {
     /** Minimum gap between any two messages. */
     globalCooldownMs: 8000,
-    /** Minimum gap between two messages aimed at the same player. */
+    /**
+     * Minimum gap between two messages aimed at the same player — applies only
+     * when WE started it (a macro-check callout). It never gags a reply to
+     * someone who is talking to us; see `conversation` below.
+     */
     perPlayerCooldownMs: 60000,
     /** Minimum gap between two messages of the same trigger kind. */
     perKindCooldownMs: 20000,
-    maxPerMinute: 4,
+    maxPerMinute: 8,
     maxPerHour: 30,
     /** Don't answer the same player more than this many times back-to-back. */
     maxConsecutivePerPlayer: 2,
     /** Drop a message identical to one sent inside this window (Hypixel eats dupes). */
     dedupeWindowMs: 300000,
+
+    /**
+     * When someone is actually talking to us, the anti-nag limits are the
+     * wrong tool — you finish a conversation, you don't ration it.
+     */
+    conversation: {
+      /** Their next message counts as continuing if it lands inside this. */
+      windowMs: 120000,
+      /** Gap between our replies mid-conversation, instead of the global one. */
+      cooldownMs: 2500,
+      /** Turns we'll take in a normal exchange before letting it rest. */
+      maxTurns: 12,
+      /**
+       * Turns in an argument. Much lower on purpose: a real person stops
+       * defending themselves to someone calling them a cheater, and trading
+       * shots forever is exactly what a bot would do.
+       */
+      maxArgumentTurns: 3,
+    },
   },
 
   /** What the client is actually doing — fed to the model as context. */

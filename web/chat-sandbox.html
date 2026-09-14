@@ -534,6 +534,9 @@
     chatRadius: 12,      // close enough to plausibly be talking to us
     spotClaimRadius: 20, // a spot claim reaches further
   };
+  const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 12, maxArgumentTurns: 3 };
+  const ARGUMENT_KINDS = ["accusation", "hostile", "macro_check"];
+
   const LIMITS = {
     globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
     maxPerMinute: 4, maxConsecutivePerPlayer: 2, dedupeWindowMs: 300000,
@@ -572,6 +575,7 @@
     fuses: {},         // name -> {patience, rage} rolled on their first block
     anger: {},         // name -> highest anger level already spent on them
     accusations: {},   // name -> count
+    convo: {},         // name -> {lastTurn, turns}
     pathfinder: { state: "running", blockedBy: null },
     sent: [],          // {ts, message, subject, kind}
     rotation: {},
@@ -663,10 +667,16 @@
 
   function checkPolicy(trigger, message) {
     const ts = Date.now();
+    // Someone talking to us is not someone we are nagging: a conversation is
+    // answered at conversation pace and bounded by turns, not by the cooldowns
+    // that stop us pestering a player unprompted.
+    const conversing = Boolean(trigger.conversational);
+    const arguing = ARGUMENT_KINDS.indexOf(trigger.kind) !== -1;
     const last = state.sent[state.sent.length - 1];
-    if (last && ts - last.ts < LIMITS.globalCooldownMs) {
-      return { allowed: false, reason: "global cooldown, " +
-        Math.ceil((LIMITS.globalCooldownMs - (ts - last.ts)) / 1000) + "s left" };
+    const gap = conversing ? CONVO.cooldownMs : LIMITS.globalCooldownMs;
+    if (last && ts - last.ts < gap) {
+      return { allowed: false, reason: (conversing ? "still finishing the last reply, " : "global cooldown, ") +
+        Math.ceil((gap - (ts - last.ts)) / 1000) + "s left" };
     }
     if (state.sent.filter((s) => ts - s.ts <= 60000).length >= LIMITS.maxPerMinute) {
       return { allowed: false, reason: "per-minute limit reached" };
@@ -675,13 +685,14 @@
     // per-kind and per-player brakes step aside — a whole macro check happens
     // inside one 60s window. The consecutive cap below still bounds it.
     const escalating = Boolean(trigger.escalates);
+    const relaxed = escalating || conversing;
     const sameKind = [...state.sent].reverse().find((s) => s.kind === trigger.kind);
-    if (!escalating && sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
+    if (!relaxed && sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
       return { allowed: false, reason: "cooldown for " + trigger.kind };
     }
     if (trigger.subject) {
       const samePlayer = [...state.sent].reverse().find((s) => s.subject === trigger.subject);
-      if (!escalating && samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
+      if (!relaxed && samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
         return { allowed: false, reason: "cooldown for " + shortName(trigger.subject) };
       }
       let streak = 0;
@@ -689,8 +700,12 @@
         if (state.sent[i].subject !== trigger.subject) break;
         streak++;
       }
-      if (streak >= LIMITS.maxConsecutivePerPlayer + (escalating ? 1 : 0)) {
-        return { allowed: false, reason: "already replied to " + shortName(trigger.subject) + " " + streak + "x in a row" };
+      let cap = LIMITS.maxConsecutivePerPlayer + (escalating ? 1 : 0);
+      if (conversing) cap = arguing ? CONVO.maxArgumentTurns : CONVO.maxTurns;
+      if (streak >= cap) {
+        return { allowed: false, reason: arguing && conversing
+          ? "said my piece to " + shortName(trigger.subject) + " " + streak + " times — letting it go"
+          : "already replied to " + shortName(trigger.subject) + " " + streak + "x in a row" };
       }
     }
     if (message && state.sent.some((s) => s.message === message && ts - s.ts <= LIMITS.dedupeWindowMs)) {
@@ -895,6 +910,10 @@
       if (trigger.anger && trigger.subject) {
         state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
       }
+      if (trigger.conversational && trigger.subject) {
+        const open = state.convo[trigger.subject] || { turns: 0 };
+        state.convo[trigger.subject] = { lastTurn: Date.now(), turns: open.turns + 1 };
+      }
 
       // Think for a beat, then type at a human rate.
       const delay = Math.min(7000, 400 + Math.random() * 1000 + attempt.message.length * (45 + Math.random() * 45));
@@ -943,7 +962,7 @@
       if (named || nearby || blocking) {
         state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
         return respond({
-          kind: "accusation", subject: player.name, channel,
+          kind: "accusation", subject: player.name, channel, conversational: true,
           evidence: shortName(player.name) + " is accusing me of cheating" +
             (blocking ? ", right after blocking my path" : "") +
             (state.accusations[player.name] > 1 ? " (#" + state.accusations[player.name] + " in 5min)" : ""),
@@ -957,7 +976,7 @@
     if (SPOT_CLAIM.test(text) && (nearForClaim || named) &&
         !(AGGRESSIVE.test(text) && !POLITE.test(text))) {
       return respond({
-        kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate",
+        kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate", conversational: true,
         evidence: shortName(player.name) + ' said "' + escapeHtml(text) +
           '" — laying claim to this spot, and as far as i know they are right',
       });
@@ -965,15 +984,19 @@
 
     if (HOSTILE.test(text) && (named || nearby)) {
       return respond({
-        kind: "hostile", subject: player.name, channel,
+        kind: "hostile", subject: player.name, channel, conversational: true,
         evidence: shortName(player.name) + " told me to move while standing next to me",
       });
     }
 
-    if (mentions(text, SELF)) {
+    // Nobody keeps saying your name once you are already talking — so while an
+    // exchange is live, their next line is for us whether it names us or not.
+    const open = state.convo[player.name];
+    const continuing = !named && open && (ts - open.lastTurn) <= CONVO.windowMs && nearby;
+    if (named || continuing) {
       return respond({
-        kind: "mention", subject: player.name, channel,
-        evidence: shortName(player.name) + " used my name",
+        kind: "mention", subject: player.name, channel, conversational: true,
+        evidence: shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
       });
     }
 
@@ -1010,6 +1033,7 @@
     const fuse = fuseFor(player.name);
     return respond({
       kind: "macro_check", subject: player.name, channel: state.channel, anger,
+      conversational: Boolean(said),
       escalates: anger > 1,
       evidence: shortName(player.name) + " has stood in front of me " + count + "x" +
         (said ? ' and said "' + escapeHtml(said) + '"' : "") +
@@ -1097,6 +1121,7 @@
     "hey 3172 nice cape",
     "reporting you for autoclicker",
     "anyone selling a bleeding heart",
+    "oh nice how long you been grinding",
   ];
 
   function currentSpeaker() {
@@ -1153,7 +1178,7 @@
 
   el("resetBtn").addEventListener("click", () => {
     state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {};
-    state.log = []; state.fuses = {}; state.anger = {};
+    state.log = []; state.fuses = {}; state.anger = {}; state.convo = {};
     state.pathfinder = { state: "running", blockedBy: null };
     chatLog.innerHTML = "";
     boot();

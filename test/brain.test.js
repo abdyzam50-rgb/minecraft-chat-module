@@ -424,7 +424,11 @@ test('a fair claim gets conceded, and differently each time', async () => {
   const ai = createChatAI({
     username: '3172',
     llm: { fallbackOnError: true },
-    limits: { globalCooldownMs: 0, perPlayerCooldownMs: 0, perKindCooldownMs: 0, maxConsecutivePerPlayer: 99, maxPerMinute: 99 },
+    limits: {
+      globalCooldownMs: 0, perPlayerCooldownMs: 0, perKindCooldownMs: 0,
+      maxConsecutivePerPlayer: 99, maxPerMinute: 99,
+      conversation: { cooldownMs: 0 },
+    },
   });
   const said = [];
   ai.on('say', (a) => said.push(a));
@@ -455,4 +459,96 @@ test('the model is told to give way on a spot claim', async () => {
   const prompt = capture.params.messages[0].content;
   assert.match(prompt, /fair claim on this spot/);
   assert.match(prompt, /It is not the only way/, 'and told not to make it a catchphrase');
+});
+
+/** A conversation where they stop using our name after the first message. */
+function conversation(options = {}) {
+  let clock = 1_700_000_000_000;
+  const replies = [
+    'just grinding ghosts, you?',
+    'since about 4am, lost track honestly',
+    'one voltas and a load of nothing',
+    'cheers, you too',
+    'yeah ill be here a while yet',
+  ];
+  let call = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: replies[call++ % replies.length], reason: '' }) }],
+          };
+        },
+      },
+    },
+    ...options,
+  });
+  return { ai, tick: (ms = 6000) => { clock += ms; } };
+}
+
+test('a conversation runs to its end instead of dying after one reply', async () => {
+  const { ai, tick } = conversation();
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 5 }] });
+  for (const line of [
+    'what you upto 3172?',
+    'oh nice how long you been grinding',   // no name from here on
+    'any luck with drops?',
+    'fair enough, good luck man',
+  ]) {
+    await ai.handle({ type: 'chat', raw: `[VIP] BlockBuddy: ${line}` });
+    tick();
+  }
+
+  assert.equal(said.length, 4, `expected all four answered, got ${said.length}: ${said.join(' | ')}`);
+});
+
+test('an unnamed line only counts while the conversation is live', async () => {
+  const { ai, tick } = conversation();
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 5 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
+  assert.equal(said.length, 1);
+
+  tick(5 * 60 * 1000); // they wandered off; the exchange is over
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: anyone selling a bleeding heart' });
+  assert.equal(said.length, 1, 'a stray line long after is not ours to answer');
+});
+
+test('an argument gets cut short where a chat does not', async () => {
+  const { ai, tick } = conversation();
+  const said = [];
+  const skipped = [];
+  ai.on('say', (a) => said.push(a));
+  ai.on('skip', (s) => skipped.push(s.reason));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Accuser', distance: 4 }] });
+  for (let i = 0; i < 6; i += 1) {
+    await ai.handle({ type: 'chat', raw: `[MVP+] Accuser: 3172 ur macroing, number ${i}` });
+    tick();
+  }
+
+  assert.equal(said.length, 3, 'three replies to an accuser, then it drops it');
+  assert.match(skipped.at(-1), /letting it go/);
+});
+
+test('we still do not nag someone who never spoke to us', async () => {
+  const { ai, tick } = conversation({ random: () => 0 });
+  const skipped = [];
+  ai.on('skip', (s) => skipped.push(s.reason));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Checker', distance: 1.5 }] });
+  for (let i = 0; i < 4; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Checker', distance: 1.4 } });
+  }
+  // The pathfinder callout is ours, not theirs — the global cooldown still holds.
+  assert.ok(skipped.some((r) => /global cooldown/.test(r)), skipped.join(' | '));
 });

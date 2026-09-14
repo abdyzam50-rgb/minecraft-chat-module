@@ -1,5 +1,8 @@
 import { findRepeat } from './similarity.js';
 
+/** Exchanges worth cutting short rather than seeing through. */
+const ARGUMENT_KINDS = new Set(['accusation', 'hostile', 'macro_check']);
+
 /**
  * Rate limiting and repeat suppression.
  *
@@ -34,9 +37,20 @@ export class Policy {
       return { allowed: false, reason: `channel "${trigger.channel}" is not enabled` };
     }
 
+    // Someone talking to us is not someone we are nagging. A conversation gets
+    // answered at conversation pace and is bounded by its turn count, not by
+    // the cooldowns that exist to stop us pestering a player unprompted.
+    const C = L.conversation;
+    const conversing = Boolean(trigger.conversational);
+    const arguing = ARGUMENT_KINDS.has(trigger.kind);
+
     const last = this.sent[this.sent.length - 1];
-    if (last && ts - last.ts < L.globalCooldownMs) {
-      return { allowed: false, reason: 'global cooldown' };
+    const gap = conversing ? C.cooldownMs : L.globalCooldownMs;
+    if (last && ts - last.ts < gap) {
+      return {
+        allowed: false,
+        reason: conversing ? 'still finishing the last reply' : 'global cooldown',
+      };
     }
 
     const minute = this.sent.filter((s) => ts - s.ts <= 60000).length;
@@ -55,9 +69,15 @@ export class Policy {
     // minute and per hour caps, and the consecutive cap below — three replies
     // to one player and it stops, no matter how long they keep standing there.
     const escalating = Boolean(trigger.escalates);
-    const kindCooldown = escalating ? 0 : L.perKindCooldownMs;
-    const playerCooldown = escalating ? 0 : L.perPlayerCooldownMs;
-    const consecutiveCap = L.maxConsecutivePerPlayer + (escalating ? 1 : 0);
+    const relaxed = escalating || conversing;
+    const kindCooldown = relaxed ? 0 : L.perKindCooldownMs;
+    const playerCooldown = relaxed ? 0 : L.perPlayerCooldownMs;
+
+    // How many replies in a row this player may have. A friendly exchange runs
+    // as long as they keep talking; an argument gets three, because a real
+    // person stops defending themselves and goes back to what they were doing.
+    let consecutiveCap = L.maxConsecutivePerPlayer + (escalating ? 1 : 0);
+    if (conversing) consecutiveCap = arguing ? C.maxArgumentTurns : C.maxTurns;
 
     const sameKind = [...this.sent].reverse().find((s) => s.kind === trigger.kind);
     if (sameKind && ts - sameKind.ts < kindCooldown) {
@@ -76,7 +96,12 @@ export class Policy {
         streak += 1;
       }
       if (streak >= consecutiveCap) {
-        return { allowed: false, reason: `already replied to ${trigger.subject} ${streak}x in a row` };
+        return {
+          allowed: false,
+          reason: arguing && conversing
+            ? `said my piece to ${trigger.subject} ${streak} times — letting it go`
+            : `already replied to ${trigger.subject} ${streak}x in a row`,
+        };
       }
     }
 

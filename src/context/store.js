@@ -44,6 +44,12 @@ export class ContextStore {
 
     /** Last thing we said, so we can tell whether a reply is aimed at us. */
     this.lastOutgoing = null;
+
+    /**
+     * Who we are currently talking with.
+     * @type {Map<string, {since:number, lastTurn:number, turns:number}>}
+     */
+    this.conversations = new Map();
   }
 
   player(name) {
@@ -149,6 +155,34 @@ export class ContextStore {
   addIncident(kind, subject, detail, ts = this.now()) {
     this.incidents.push({ ts, kind, subject, detail });
     if (this.incidents.length > INCIDENT_HISTORY) this.incidents.shift();
+  }
+
+  /** We just answered this player — we are now in a conversation with them. */
+  openConversation(name, ts = this.now()) {
+    const existing = this.conversations.get(name);
+    if (existing) {
+      existing.lastTurn = ts;
+      existing.turns += 1;
+      return existing;
+    }
+    const fresh = { since: ts, lastTurn: ts, turns: 1 };
+    this.conversations.set(name, fresh);
+    return fresh;
+  }
+
+  /**
+   * Are we mid-conversation with them? Once someone is talking to you they
+   * stop using your name, so this is what lets "how long you been grinding"
+   * count as addressed to us.
+   */
+  inConversation(name, windowMs, ts = this.now()) {
+    const open = this.conversations.get(name);
+    return Boolean(open && ts - open.lastTurn <= windowMs);
+  }
+
+  /** How many times we have answered them in this exchange. */
+  conversationTurns(name) {
+    return this.conversations.get(name)?.turns ?? 0;
   }
 
   recordOutgoing(message, ts = this.now()) {

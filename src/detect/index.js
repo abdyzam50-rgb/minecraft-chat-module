@@ -18,6 +18,8 @@ import {
  * @property {string|null} subject player the reply is aimed at
  * @property {number} severity    1 (mild) .. 3 (they are really at it)
  * @property {number} [anger]     1 annoyed, 2 fed up, 3 yelling
+ * @property {boolean} [conversational] true when they spoke to us, rather than
+ *                                 us calling something out unprompted
  * @property {boolean} [escalates] true when this reply continues an exchange
  *                                 we already started, so the limiter gives it
  *                                 one extra turn
@@ -110,6 +112,7 @@ export function detectMacroCheckTalk(store, config, message, ts = Date.now()) {
     said: message.content,
     config,
   });
+  trigger.conversational = true;
   if (trigger.anger <= store.player(message.sender).lastAnger) return null;
   return trigger;
 }
@@ -142,6 +145,7 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
     kind: 'accusation',
     subject: message.sender,
     severity: priors >= 2 ? 3 : 2,
+    conversational: true,
     evidence:
       `${message.sender} said "${message.content}" — they are accusing me of cheating or macroing` +
       (hasHistory ? ', right after blocking my pathfinder' : '') +
@@ -177,6 +181,7 @@ export function detectSpotClaim(store, config, message, ts = Date.now()) {
     kind: 'spot_claim',
     subject: message.sender,
     severity: 1,
+    conversational: true,
     polite,
     /** Saying "ill move" and then not moving is worse than saying nothing. */
     hint: 'relocate',
@@ -203,13 +208,14 @@ export function detectHostile(store, config, message, ts = Date.now()) {
     kind: 'hostile',
     subject: message.sender,
     severity: 1,
+    conversational: true,
     evidence: `${message.sender} said "${message.content}" while standing near me.`,
     channel: message.channel === 'whisper' ? 'whisper' : message.channel,
   };
 }
 
 /** Plain mention or whisper — someone is talking to us and wants an answer. */
-export function detectMention(store, config, message) {
+export function detectMention(store, config, message, ts = Date.now()) {
   if (!config.detect.mention.enabled) return null;
   if (!message.sender || message.system) return null;
   if (message.sender === config.username) return null;
@@ -217,16 +223,26 @@ export function detectMention(store, config, message) {
 
   const isWhisper = message.channel === 'whisper';
   const named = mentions(message.content, config.username, config.aliases);
-  if (!named && !(isWhisper && config.detect.mention.answerWhispers)) return null;
+
+  // Nobody keeps saying your name once you are already talking. If we are
+  // mid-exchange with them and they are still nearby, their next line is for
+  // us whether or not it says "3172".
+  const continuing =
+    !named &&
+    store.inConversation(message.sender, config.limits.conversation.windowMs, ts) &&
+    store.isNearby(message.sender, config.detect.chatRadius, ts);
+
+  if (!named && !continuing && !(isWhisper && config.detect.mention.answerWhispers)) return null;
   if (!isWhisper && !looksLikeQuestion(message.content) && message.content.length < 4) return null;
 
   return {
     kind: isWhisper ? 'whisper' : 'mention',
     subject: message.sender,
     severity: 1,
+    conversational: true,
     evidence: `${message.sender} ${isWhisper ? 'whispered' : 'said'} "${message.content}"${
       named ? ` and used my name (${shortName(config.username)})` : ''
-    }.`,
+    }${continuing ? ', carrying on the conversation we are already having' : ''}.`,
     channel: isWhisper ? 'whisper' : message.channel,
   };
 }
@@ -253,7 +269,7 @@ export function detectFromChat(store, config, message, ts = Date.now()) {
     detectAccusation(store, config, message, ts) ??
     detectSpotClaim(store, config, message, ts) ??
     detectHostile(store, config, message, ts) ??
-    detectMention(store, config, message) ??
+    detectMention(store, config, message, ts) ??
     null
   );
 }

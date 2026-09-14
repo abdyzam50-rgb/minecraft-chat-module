@@ -204,14 +204,52 @@ gives every message the same rhythm regardless of length, which reads as
 machinery the moment anyone watches for it. A one-word reply lands in under a
 second; a full sentence takes four or five.
 
+## Finishing a conversation
+
+The rate limits exist to stop the bot nagging someone. A conversation is the
+opposite of nagging, and the first version couldn't tell them apart — it
+answered the first message and then went mute for a minute, which is worse than
+never answering.
+
+Two things fix that.
+
+**A line doesn't have to name you to be for you.** Nobody keeps saying your
+name once you're already talking. Once the bot has answered someone, their next
+messages count as addressed to it — as long as they're still nearby and inside
+`limits.conversation.windowMs` (2 minutes). So "oh nice how long you been
+grinding" gets an answer, where before it matched nothing at all.
+
+**A reply to someone gets conversation rules, not nag rules.** When the trigger
+came from something they said, the per-player and per-kind cooldowns don't
+apply and the gap between replies drops to `conversation.cooldownMs` (2.5s).
+When the bot is the one speaking up — a macro-check callout nobody asked for —
+the full cooldowns still hold.
+
+Turn budgets are what bound it instead, and they differ by what kind of
+exchange it is:
+
+| | Turns |
+|---|---|
+| Chatting (`mention`, `whisper`, `spot_claim`) | `conversation.maxTurns` — 12 |
+| Arguing (`accusation`, `hostile`, `macro_check`) | `conversation.maxArgumentTurns` — 3 |
+
+An argument is cut short on purpose. A real person stops defending themselves
+to someone calling them a cheater and goes back to what they were doing; trading
+shots until one side gives up is exactly what a bot would do. After three the
+log says "said my piece — letting it go".
+
+`maxPerMinute` moved from 4 to 8 to leave room for a real back-and-forth. That
+is still well inside normal human chat volume.
+
 ## What stops it speaking
 
 Auto-chat is the fastest way to get muted, so the limiter is deliberately
 strict (`src/chat/policy.js`):
 
-- 8s between any two messages, 4/minute, 30/hour
-- 60s before replying to the same player again
-- never more than 2 replies to the same person back-to-back
+- 8s between unprompted messages (2.5s mid-conversation), 8/minute, 30/hour
+- 60s before speaking to the same player again *unprompted* (a reply to them is
+  governed by the conversation rules above, not this)
+- never more than 2 unprompted messages to the same person back-to-back
 - messages too close to a recent one are dropped (see above)
 - a "you are muted" line in chat silences the bot for 15 minutes
 - anything starting with `/` gets its slash stripped — a model reply can never
@@ -335,7 +373,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-62 tests over name shortening, chat parsing, detector thresholds, the macro-check
+78 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
-typing model, the rate limiter, sanitisation, the bridge, and the full
+typing model, conversation continuity and turn budgets, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

@@ -22,11 +22,12 @@ export class ChatAI extends EventEmitter {
   constructor(options = {}) {
     super();
     // `client` is an SDK instance, not config — keep it out of the merge.
-    const { client, random, ...configOptions } = options;
+    const { client, random, now, ...configOptions } = options;
     this.config = resolveConfig(configOptions);
-    this.store = new ContextStore({ random });
+    this.now = now ?? (() => Date.now());
+    this.store = new ContextStore({ random, now: this.now });
     this.store.updateSelf({ username: this.config.username, ...this.config.self });
-    this.policy = new Policy(this.config);
+    this.policy = new Policy(this.config, { now: this.now });
     this.claude = new ClaudeResponder(this.config, { client });
     this.fallback = new FallbackResponder(this.config);
     /** Queue of messages waiting to be picked up by a polling client. */
@@ -44,7 +45,7 @@ export class ChatAI extends EventEmitter {
    * @returns {Promise<object|null>} the action produced, if any
    */
   async handle(event) {
-    const ts = event.ts ?? Date.now();
+    const ts = event.ts ?? this.now();
     switch (event.type) {
       case 'chat':
         return this.handleChat(event, ts);
@@ -109,7 +110,7 @@ export class ChatAI extends EventEmitter {
   }
 
   /** Decide, sanitize, rate-limit and queue a reply for one trigger. */
-  async respond(trigger, ts = Date.now()) {
+  async respond(trigger, ts = this.now()) {
     this.emit('trigger', { trigger });
 
     const gate = this.policy.check(trigger);
@@ -176,7 +177,7 @@ export class ChatAI extends EventEmitter {
       reason: decision.reason,
       source: decision.source,
       delayMs: typingDelay(clean.message, this.config.chat),
-      ts: Date.now(),
+      ts: this.now(),
     };
 
     if (this.config.dryRun) {
@@ -187,6 +188,7 @@ export class ChatAI extends EventEmitter {
     this.policy.record(trigger, clean.message);
     this.store.recordOutgoing(clean.message);
     if (trigger.anger && trigger.subject) this.store.noteAnger(trigger.subject, trigger.anger);
+    if (trigger.conversational && trigger.subject) this.store.openConversation(trigger.subject);
     this.outbox.push(action);
     this.emit('say', action);
     return action;
