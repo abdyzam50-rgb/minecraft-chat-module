@@ -39,6 +39,40 @@ binds to `127.0.0.1` and speaks JSON, so anything that can do an HTTP POST can
 drive it — ChatTriggers, a Forge mod, a Baritone plugin, or the included
 mineflayer adapter.
 
+## Which model, and what it actually knows
+
+`llm.provider` takes `claude` (default) or `gemini`; both honour the same
+contract, so swapping is one config line.
+
+```jsonc
+{ "llm": { "provider": "gemini", "model": "gemini-2.5-flash" } }   // GEMINI_API_KEY
+{ "llm": { "provider": "claude", "model": "claude-opus-5" } }      // ANTHROPIC_API_KEY
+```
+
+The Gemini path is plain `fetch` against the REST API, so there's no extra
+dependency. Adding a third provider means one file with a `decide()` method.
+
+**But changing model rarely fixes a wrong answer about the game.** Asked for
+early-game money methods, the bot answered "slayer or f7" — both endgame. That
+isn't a reasoning failure any model size fixes; it's that SkyBlock's meta moves
+faster than training data, and a confident wrong answer is worse than none.
+
+Two things fix it, and they work on either provider:
+
+**`knowledge/skyblock.md`** is injected verbatim into the cached prompt and told
+to override anything the model thinks it remembers. It ships with real
+early-game methods (forge/refined mithril, NPC flipping, experimentation table,
+the Rift, zealots), an explicit "NOT early game" list, and the ghost drops.
+Edit it as the game changes — that's the point of it being a file. Point at it
+with `knowledge.file`, or pass `knowledge.text` inline for one-off facts like
+the current mayor.
+
+**It's allowed to say it doesn't know.** `knowledge.admitIgnorance` (on by
+default) permits "idk tbh", "no clue mate", "not my area" and forbids inventing
+prices, drop rates or advice. A player who's been on one grind for ten hours
+genuinely wouldn't know the current early-game meta, so admitting it is both
+more honest and more human than bluffing.
+
 ## Setup
 
 ```bash
@@ -533,6 +567,8 @@ src/context/store.js    rolling world state: chat, players, pathfinder, incident
 src/detect/             when something is worth reacting to, and how angry
 src/llm/prompt.js       system prompt (cached) + per-event context
 src/llm/claude.js       the one API call, structured JSON out
+src/llm/gemini.js       the same contract against Gemini's REST API
+src/knowledge.js        game facts you maintain, and permission to say "idk"
 src/brain.js            wires it together, emits 'say' / 'skip'
 src/bridge/server.js    localhost HTTP bridge
 chattriggers/           the in-game half
@@ -546,7 +582,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-113 tests over name shortening, chat parsing, detector thresholds, the macro-check
+125 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

@@ -5,6 +5,7 @@ import { parseChatLine } from './chat/parse.js';
 import { sanitize, formatForChannel } from './chat/sanitize.js';
 import { Policy } from './chat/policy.js';
 import { ClaudeResponder } from './llm/claude.js';
+import { GeminiResponder } from './llm/gemini.js';
 import { FallbackResponder } from './llm/fallback.js';
 import { detectFromChat, detectPathfinderBlock, detectMuted } from './detect/index.js';
 import { getPersona } from './persona/personas.js';
@@ -29,7 +30,11 @@ export class ChatAI extends EventEmitter {
     this.store = new ContextStore({ random, now: this.now });
     this.store.updateSelf({ username: this.config.username, ...this.config.self });
     this.policy = new Policy(this.config, { now: this.now });
-    this.claude = new ClaudeResponder(this.config, { client });
+    this.responder = this.config.llm.provider === 'gemini'
+      ? new GeminiResponder(this.config)
+      : new ClaudeResponder(this.config, { client });
+    /** @deprecated kept for callers that reached in before providers existed */
+    this.claude = this.responder;
     this.fallback = new FallbackResponder(this.config);
     /** Queue of messages waiting to be picked up by a polling client. */
     this.outbox = [];
@@ -37,7 +42,7 @@ export class ChatAI extends EventEmitter {
   }
 
   get usingApi() {
-    return Boolean(this.claude.client);
+    return Boolean(this.responder.client);
   }
 
   /**
@@ -224,12 +229,12 @@ export class ChatAI extends EventEmitter {
    */
   async think(trigger, ts, options) {
     if (!this.usingApi) {
-      return this.config.llm.fallbackOnError || !this.claude.available
+      return this.config.llm.fallbackOnError || !this.responder.available
         ? this.fallback.decide(this.store, trigger)
         : null;
     }
     try {
-      return await this.claude.decide(this.store, trigger, ts, options);
+      return await this.responder.decide(this.store, trigger, ts, options);
     } catch (error) {
       this.emit('error', error);
       if (!this.config.llm.fallbackOnError) {

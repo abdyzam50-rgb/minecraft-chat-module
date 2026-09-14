@@ -1,5 +1,6 @@
 import { getPersona, GRIND_CONTEXT, HARD_RULES } from '../persona/personas.js';
 import { buildSlangSection } from '../persona/slang.js';
+import { buildKnowledgeSection, loadKnowledge } from '../knowledge.js';
 import { shortName } from '../chat/shortname.js';
 
 /**
@@ -10,6 +11,7 @@ import { shortName } from '../chat/shortname.js';
 export function buildSystemPrompt(config) {
   const persona = getPersona(config.persona);
   const self = shortName(config.username, { overrides: config.shortNames });
+  const knowledge = loadKnowledge(config);
 
   return [
     `You are the chat voice of a Minecraft player called ${config.username} (people call them "${self}").`,
@@ -53,6 +55,7 @@ export function buildSystemPrompt(config) {
     '',
     ...buildSlangSection(config),
     '',
+    ...buildKnowledgeSection(config, knowledge),
     'Hard limits — these override tone:',
     ...HARD_RULES.map((r) => `- ${r}`),
     '',

@@ -16,8 +16,13 @@ export const DEFAULTS = {
   persona: 'snarky',
 
   llm: {
-    model: 'claude-opus-5',
-    /** medium buys noticeably less formulaic wording for ~a second of latency. */
+    /** claude | gemini — see src/llm/. Both honour the same contract. */
+    provider: 'claude',
+    /** Leave null to use the provider's default model. */
+    model: null,
+    /** Falls back to ANTHROPIC_API_KEY / GEMINI_API_KEY. */
+    apiKey: '',
+    /** Claude only: medium buys less formulaic wording for ~a second of latency. */
     effort: 'medium',
     maxTokens: 1000,
     /** Abort the request if it outlives the moment. */
@@ -166,6 +171,19 @@ export const DEFAULTS = {
     },
   },
 
+  /**
+   * Game facts the bot should treat as true. A model's training data goes
+   * stale; this does not. See knowledge/skyblock.md.
+   */
+  knowledge: {
+    /** Path to a markdown file, or null. */
+    file: null,
+    /** Extra text appended after the file. */
+    text: '',
+    /** Let it say "idk" rather than invent an answer. Strongly recommended. */
+    admitIgnorance: true,
+  },
+
   /** Chat and SkyBlock vernacular — see src/persona/slang.js. */
   slang: {
     enabled: true,
@@ -194,10 +212,24 @@ function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Deep copy, so a merged config never shares a nested object with DEFAULTS.
+ * Without this, resolving one config and then filling in a default writes
+ * straight back into the module-level defaults and every later config inherits
+ * it — which is how a Claude model id ended up on a Gemini config.
+ */
+function clone(value) {
+  if (Array.isArray(value)) return value.map(clone);
+  if (!isPlainObject(value)) return value;
+  const out = {};
+  for (const [key, inner] of Object.entries(value)) out[key] = clone(inner);
+  return out;
+}
+
 /** Deep merge that treats arrays as replacements, not concatenations. */
 export function merge(base, override) {
-  if (!isPlainObject(override)) return override === undefined ? base : override;
-  const out = { ...base };
+  if (!isPlainObject(override)) return override === undefined ? clone(base) : override;
+  const out = clone(base);
   for (const [key, value] of Object.entries(override)) {
     if (value === undefined) continue;
     out[key] = isPlainObject(base?.[key]) ? merge(base[key], value) : value;
@@ -210,20 +242,31 @@ function fromEnv(env) {
   if (env.MCCHAT_PORT) patch.bridge = { port: Number(env.MCCHAT_PORT) };
   if (env.MCCHAT_TOKEN) patch.bridge = { ...patch.bridge, token: env.MCCHAT_TOKEN };
   if (env.MCCHAT_MODEL) patch.llm = { model: env.MCCHAT_MODEL };
+  if (env.MCCHAT_PROVIDER) patch.llm = { ...patch.llm, provider: env.MCCHAT_PROVIDER };
   if (env.MCCHAT_USERNAME) patch.username = env.MCCHAT_USERNAME;
   if (env.MCCHAT_PERSONA) patch.persona = env.MCCHAT_PERSONA;
   return patch;
 }
 
+const DEFAULT_MODELS = {
+  claude: 'claude-opus-5',
+  gemini: 'gemini-2.5-flash',
+};
+
 export function resolveConfig(options = {}, env = process.env) {
   const config = merge(merge(DEFAULTS, options), fromEnv(env));
   const errors = [];
+
+  if (!config.llm.model) config.llm.model = DEFAULT_MODELS[config.llm.provider];
 
   if (!config.username) {
     errors.push('config.username is required (your in-game name)');
   }
   if (!['chill', 'snarky', 'unfiltered'].includes(config.persona)) {
     errors.push(`unknown persona "${config.persona}"`);
+  }
+  if (!['claude', 'gemini'].includes(config.llm.provider)) {
+    errors.push(`unknown llm.provider "${config.llm.provider}" — use "claude" or "gemini"`);
   }
   if (!['clean', 'allow'].includes(config.chat.profanity)) {
     errors.push(`chat.profanity must be "clean" or "allow"`);
