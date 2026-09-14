@@ -116,6 +116,14 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  if (trigger.kind === 'spot_claim') {
+    lines.push(
+      '',
+      'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue, do not justify yourself, do not grovel — two or three words is usually plenty.',
+      '"mb ill move" is one way to say that. It is not the only way, and you have said it before. Find another.',
+    );
+  }
+
   if (trigger.anger) {
     const persona = getPersona(config.persona);
     lines.push('', ANGER[trigger.anger] ?? ANGER[1]);

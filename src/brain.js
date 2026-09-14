@@ -171,6 +171,8 @@ export class ChatAI extends EventEmitter {
       trigger: trigger.kind,
       subject: trigger.subject,
       anger: trigger.anger ?? null,
+      /** Something the client should do as well as type, or null. */
+      hint: trigger.hint ?? null,
       reason: decision.reason,
       source: decision.source,
       delayMs: typingDelay(clean.message, this.config.chat),

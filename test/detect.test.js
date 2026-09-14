@@ -128,3 +128,35 @@ test('macro-check talk from across the lobby is ignored', () => {
   const trigger = detectFromChat(store, config, chat('Stranger', 'say something'), NOW);
   assert.equal(trigger, null);
 });
+
+test('a fair claim on the spot is its own thing, not hostility', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Miner', distance: 3 }], NOW);
+
+  const polite = detectFromChat(store, config, chat('Miner', 'excuse me 3172 i was here first'), NOW);
+  assert.equal(polite.kind, 'spot_claim');
+  assert.equal(polite.polite, true);
+  assert.equal(polite.hint, 'relocate');
+
+  const blunt = detectFromChat(store, config, chat('Miner', 'move im mining here'), NOW);
+  assert.equal(blunt.kind, 'spot_claim', 'blunt but fair is still a claim');
+});
+
+test('actual aggression is not treated as a fair claim', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Rude', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Rude', 'get out of here you clown'), NOW).kind, 'hostile');
+});
+
+test('a macro check dressed up as a spot claim is still a macro check', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+  const trigger = detectFromChat(store, config, chat('Checker', 'move if ur real, i was here first'), NOW);
+  assert.equal(trigger.kind, 'macro_check');
+});
+
+test('a claim from someone across the lobby is not ours to answer', () => {
+  const { config, store } = setup();
+  const trigger = detectFromChat(store, config, chat('Stranger', 'i was here first'), NOW);
+  assert.equal(trigger, null);
+});

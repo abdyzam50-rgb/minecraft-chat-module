@@ -419,3 +419,40 @@ test('the model is told to name the grind rather than deflect', async () => {
 
   assert.match(capture.params.messages[0].content, /name the grind/);
 });
+
+test('a fair claim gets conceded, and differently each time', async () => {
+  const ai = createChatAI({
+    username: '3172',
+    llm: { fallbackOnError: true },
+    limits: { globalCooldownMs: 0, perPlayerCooldownMs: 0, perKindCooldownMs: 0, maxConsecutivePerPlayer: 99, maxPerMinute: 99 },
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 3 }] });
+  for (let i = 0; i < 5; i += 1) {
+    await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: excuse me 3172 i was here first' });
+  }
+
+  assert.equal(said.length, 5, 'it answers every time');
+  assert.equal(new Set(said.map((a) => a.message)).size, 5, 'and never the same way twice');
+  for (const action of said) {
+    assert.equal(action.trigger, 'spot_claim');
+    assert.equal(action.hint, 'relocate', 'the client is told to actually move');
+    assert.doesNotMatch(action.message, /public lobby|genius|piss/, 'no attitude at a reasonable person');
+  }
+});
+
+test('the model is told to give way on a spot claim', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'mb ill move', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: excuse me 3172 i was here first' });
+
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /fair claim on this spot/);
+  assert.match(prompt, /It is not the only way/, 'and told not to make it a catchphrase');
+});

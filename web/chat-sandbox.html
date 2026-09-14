@@ -445,6 +445,7 @@
         3: ["{short} thats enough, go stand somewhere else", "{short} please stop, ive been polite about this"],
       },
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
+      spot_claim: ["mb, ill move", "oh sorry, all yours", "my bad, ill shift over", "no worries, ill find another spawn", "ah mb, moving now"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
       mention: ["just grinding ghosts, you?", "grinding ghosts in the mist, what's up"],
     },
@@ -460,6 +461,7 @@
         "report me then, i'll wait",
         "imagine calling consistency a hack",
       ],
+      spot_claim: ["mb ill move", "fair enough, ill shift", "all yours", "aight, moving", "yeah fair, ill go elsewhere"],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
       mention: ["just grinding ghosts, same as yesterday", "grinding ghosts. you?"],
     },
@@ -475,6 +477,7 @@
         "not macroing, you're just bad at this game",
         "report me then, dipshit",
       ],
+      spot_claim: ["mb ill move", "aight fair, moving", "yeah alright, all yours", "fine, ill shift over", "my bad, going"],
       hostile: ["piss off, it's a public lobby", "get lost"],
       mention: ["just grinding ghosts mate", "grinding ghosts, what do you want"],
     },
@@ -521,6 +524,9 @@
 
   const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
   const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
+  const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
+  const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
+  const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
   const DETECT = { threshold: 3, windowMs: 45000, radius: 4, patience: [4, 7], rage: [2, 4] };
@@ -781,6 +787,9 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.kind === "spot_claim"
+        ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
+        : "",
       (trigger.kind === "mention" || trigger.kind === "whisper")
         ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question.'
         : "",
@@ -886,6 +895,7 @@
       // Think for a beat, then type at a human rate.
       const delay = Math.min(7000, 400 + Math.random() * 1000 + attempt.message.length * (45 + Math.random() * 45));
       logEntry("say", "typing " + Math.round(delay) + "ms · " + attempt.source +
+        (trigger.hint ? " · client should " + trigger.hint : "") +
         " — <em>" + escapeHtml(attempt.message) + "</em>");
       scheduled = true;
       setTimeout(() => {
@@ -934,6 +944,17 @@
         });
       }
       return logEntry("skip", "accusation not aimed at me — ignored");
+    }
+
+    // A fair claim on the spot — they were here first, or they are mining this
+    // vein. Give way; arguing with a reasonable person is what a bot would do.
+    if (SPOT_CLAIM.test(text) && (nearby || mentions(text, SELF)) &&
+        !(AGGRESSIVE.test(text) && !POLITE.test(text))) {
+      return respond({
+        kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate",
+        evidence: shortName(player.name) + ' said "' + escapeHtml(text) +
+          '" — laying claim to this spot, and as far as i know they are right',
+      });
     }
 
     if (HOSTILE.test(text) && (mentions(text, SELF) || nearby)) {
@@ -1042,6 +1063,7 @@
     "macro check, say something if ur real",
     "u real?",
     "ur macroing arent you",
+    "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",
     "reporting you for autoclicker",

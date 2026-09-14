@@ -1,9 +1,12 @@
 import { mentions, shortName } from '../chat/shortname.js';
 import {
   ACCUSATION,
+  AGGRESSIVE,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
   MUTE_NOTICE,
+  POLITE,
+  SPOT_CLAIM,
   looksLikeQuestion,
 } from './patterns.js';
 
@@ -148,6 +151,43 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
   };
 }
 
+/**
+ * Someone with a fair claim to the spot: they were here first, they are mining
+ * this vein, they asked politely for room. The right answer is to give way —
+ * arguing with a reasonable person over a ghost spawn is what a bot would do.
+ *
+ * Aggression routes to detectHostile instead: "get out of here you clown" is
+ * not a request.
+ */
+export function detectSpotClaim(store, config, message, ts = Date.now()) {
+  if (!message.sender || message.system) return null;
+  if (message.sender === config.username) return null;
+  if (config.ignore.includes(message.sender)) return null;
+  if (!SPOT_CLAIM.test(message.content)) return null;
+
+  const polite = POLITE.test(message.content);
+  if (AGGRESSIVE.test(message.content) && !polite) return null;
+
+  const named = mentions(message.content, config.username, config.aliases);
+  if (!named && !store.isNearby(message.sender, config.detect.pathfinder.radius * 4, ts)) {
+    return null;
+  }
+
+  return {
+    kind: 'spot_claim',
+    subject: message.sender,
+    severity: 1,
+    polite,
+    /** Saying "ill move" and then not moving is worse than saying nothing. */
+    hint: 'relocate',
+    evidence:
+      `${message.sender} said "${message.content}" — they are laying claim to this spot` +
+      (polite ? ' and they asked politely' : '') +
+      '. As far as I know they are right.',
+    channel: message.channel === 'whisper' ? 'whisper' : message.channel,
+  };
+}
+
 /** Someone told us to move / to get out — mild hostility, not an accusation. */
 export function detectHostile(store, config, message, ts = Date.now()) {
   if (!message.sender || message.system) return null;
@@ -211,6 +251,7 @@ export function detectFromChat(store, config, message, ts = Date.now()) {
   return (
     detectMacroCheckTalk(store, config, message, ts) ??
     detectAccusation(store, config, message, ts) ??
+    detectSpotClaim(store, config, message, ts) ??
     detectHostile(store, config, message, ts) ??
     detectMention(store, config, message) ??
     null

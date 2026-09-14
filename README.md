@@ -151,7 +151,8 @@ still the hard ceiling.
 |---|---|
 | `macro_check` | The same player blocks your path 3× in 45s **and** is still within 4 blocks — then escalates as above |
 | `accusation` | Someone says cheat/hack/macro/bot/report **and** it's aimed at you — your name, nearby, blocking you, or replying to your last line |
-| `hostile` | "move", "get out", "my spot" from someone next to you |
+| `spot_claim` | Someone near you says they were here first, that they're mining this vein, or politely asks you to move — the bot gives way instead of arguing, and the action carries `hint: "relocate"` so your macro can actually move |
+| `hostile` | Genuine aggression from someone next to you — "get out of here you clown" — as opposed to a fair request |
 | `mention` / `whisper` | Your name or short form appears, or someone whispers you |
 
 The thresholds exist because the first version fired on every walk-by and was
@@ -285,7 +286,12 @@ An action back:
 ```
 
 Send `command` verbatim — it already carries `/pc`, `/gc` or `/w <name>` for
-non-public channels. `delayMs` is a randomised typing pause; honour it.
+non-public channels. `delayMs` is the modelled typing pause; honour it.
+
+`hint` is non-null when the reply promised something. Today the only value is
+`"relocate"`, set when the bot has just told someone it will move off their
+spot — saying "mb ill move" and then standing there is worse than not replying
+at all, so act on it if your macro can.
 
 ## Using it as a library
 

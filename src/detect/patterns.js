@@ -40,6 +40,32 @@ export const MACRO_CHECK_TALK = new RegExp(
   'i',
 );
 
+/**
+ * Someone laying a fair claim to the spot — they were here first, or they are
+ * mining this vein, or they are politely asking for room. Different from
+ * hostility: this one deserves a "mb, ill move", not attitude.
+ */
+export const SPOT_CLAIM = new RegExp(
+  [
+    '\\b(?:was|were)\\s?(?:here|there)\\s?first\\b',
+    '\\bi\\s?was\\s?here\\b',
+    '\\bbeen\\s?(?:here|farming|mining|grinding)\\s?(?:first|longer|a\\s?while|since|for)\\b',
+    '\\b(?:this\\s?is\\s?)?my\\s?(?:spot|vein|lane|corner|area)\\b',
+    '\\b(?:im|i\\s?am|i\\s?m)\\s?(?:mining|farming|grinding|killing|working)\\s?(?:here|this)\\b',
+    '\\b(?:can|could|would)\\s?(?:you|u)\\s?(?:please\\s?)?(?:move|shift|go)\\b',
+    '\\bmind\\s?moving\\b',
+    '\\b(?:you|u)\\s?(?:took|stole|nicked)\\s?my\\b',
+    '\\bi\\s?had\\s?(?:this|that)\\b',
+  ].join('|'),
+  'i',
+);
+
+/** Politeness markers — "excuse me" turns a demand into a request. */
+export const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
+
+/** Real aggression, as opposed to a blunt but fair request. */
+export const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
+
 /** Someone telling us to move / complaining about our pathing. */
 export const HOSTILE_NUDGE = new RegExp(
   ['get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away'].join('|'),
