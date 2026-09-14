@@ -898,3 +898,35 @@ test('when someone really is blocking, the prompt says so', async () => {
   }
   assert.match(capture.params.messages[0].content, /in your way right now: Dream/);
 });
+
+test('a greeting does not get told what we are doing', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'yo', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: Yo wsg 3172' });
+
+  assert.equal(said.length, 1);
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /just called my name/);
+  assert.match(prompt, /do not tell them what you are doing until they ask/);
+});
+
+test('it is told the mist is a place, not a mob', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'just grinding ghosts', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 what you upto' });
+
+  const system = capture.params.system[0].text;
+  assert.match(system, /"grinding ghosts"/);
+  assert.match(system, /not something anyone says/);
+});

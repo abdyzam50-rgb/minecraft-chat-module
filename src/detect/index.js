@@ -3,7 +3,7 @@ import {
   ACCUSATION,
   accusationTarget,
   AGGRESSIVE,
-  GREETING_ONLY,
+  isGreetingOnly,
   isSmallTalk,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
@@ -250,7 +250,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
     .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), message.content)
     .replace(/\s+/g, ' ')
     .trim();
-  const opener = GREETING_ONLY.test(remainder);
+  const opener = isGreetingOnly(remainder);
   // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
   const smalltalk = !opener && isSmallTalk(remainder);
 

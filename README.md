@@ -227,6 +227,13 @@ Dream: Mb G                       ->  all g
 Dream: cool cool                  ->  (nothing)
 ```
 
+### Saying it the way players say it
+
+The Mist is a place; ghosts are the mob. You grind *ghosts*, in the Mist —
+"grinding mist" is not something anyone says, and saying it marks you out
+instantly. That's in the grind context and in the glossary, because getting the
+local noun wrong undoes every other bit of camouflage.
+
 ### Slang
 
 `src/persona/slang.js` carries the vernacular, and it does two jobs. **Reading**:
@@ -290,6 +297,7 @@ Now they route by meaning:
 | | |
 |---|---|
 | `wsg`, `wsp`, `wagwan` | a greeting — `opener`, answered with `sup` / `nm u` |
+| `yo wsg`, `hey yo`, `wsg bro` | stacked greetings, still just hello |
 | `wyd`, `hbu`, `hru` | real questions — answered properly |
 | `gg`, `k`, `mb` | filler — a token back, or nothing |
 
@@ -498,7 +506,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-100 tests over name shortening, chat parsing, detector thresholds, the macro-check
+104 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

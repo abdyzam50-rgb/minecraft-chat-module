@@ -245,3 +245,23 @@ test('a bare insult from someone next to us is still taken personally', () => {
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', 'cheater'), NOW)?.kind, 'accusation');
 });
+
+test('stacked greetings are still just hello', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+
+  for (const text of ['Yo wsg 3172', 'hey yo 3172', '3172 wsg bro', 'yo 3172', 'hey there 3172']) {
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.equal(trigger?.opener, true, `"${text}" is a greeting, nothing more`);
+  }
+});
+
+test('a greeting with a question attached is not just a greeting', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+
+  for (const text of ['yo 3172 hows the grind', 'wsg 3172 wyd', '3172 hey whats the ah price']) {
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.notEqual(trigger?.opener, true, `"${text}" asks something`);
+  }
+});

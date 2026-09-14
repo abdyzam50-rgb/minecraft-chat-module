@@ -116,8 +116,23 @@ export const HOSTILE_NUDGE = new RegExp(
  * A greeting with nothing else in it. "yo 3172" is not a question — it wants
  * "?" or "yh?" back, not a sentence about ghost drops.
  */
-export const GREETING_ONLY =
-  /^(?:y+o+|h+e+y+|h+i+|hello|hell+o+|sup|wsup|wsp|wsg|wassup|whats\s?good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|yo+)?[\s!?.,]*$/i;
+const GREETING_WORD =
+  /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
+
+/**
+ * Is the message nothing but greeting? Checked word by word, because people
+ * stack them — "yo wsg", "hey yo", "wsg bro" are all still just hello, and
+ * answering one with what you happen to be doing is volunteering information
+ * nobody asked for.
+ */
+export function isGreetingOnly(text) {
+  const words = String(text ?? '')
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.every((word) => GREETING_WORD.test(word));
+}
 
 /**
  * Words that carry no content on their own. A message made entirely of these

@@ -544,7 +544,13 @@
     return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
   }
 
-  const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|wsp|wsg|wassup|whats\s?good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola)?[\s!?.,]*$/i;
+  const GREETING_WORD = /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
+
+  /** People stack greetings — "yo wsg", "hey yo" — and it is all still hello. */
+  function isGreetingOnly(text) {
+    const words = String(text || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+    return words.every(function (w) { return GREETING_WORD.test(w); });
+  }
   const SECOND_PERSON = /\b(?:u|you|ur|your|yours|urself|yourself|yall)\b/gi;
   const THIRD_PARTY = /\b(?:most|some|many|lots|everyone|everybody|people|they|them|their|he|she|others|anyone|someone|somebody|guy|dude|kid|player|players)\b/gi;
 
@@ -860,6 +866,7 @@
     return [
       "You are the chat voice of a Minecraft player called 3172 on Hypixel SkyBlock.",
       "They are grinding Ghosts in the Mist in the Dwarven Mines with a pathing macro, so they cannot stop to type. You type for them.",
+      "Say it the way players do: \"grinding ghosts\" or \"doing ghosts\". The Mist is the place, not the mob — nobody says \"grinding mist\", and saying it marks you out immediately. \"in the mist\" is fine as a location.",
       "The Mist is the most macro-accused grind in the game, so other players constantly run their own macro checks: they stand in your face or ask you to prove you are real, to see whether you react like a person.",
       "",
       "Write ONE line of Minecraft chat. Short — a handful of words, around 40 characters, 100 absolute max. Lowercase, clipped, typos fine.",
@@ -1093,7 +1100,7 @@
       // Strip our name and see whether anything was actually said. "yo 3172"
       // wants "?" back, not a sentence about ghost drops.
       const remainder = text.replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
-      const opener = GREETING_ONLY.test(remainder);
+      const opener = isGreetingOnly(remainder);
       const smalltalk = !opener && isSmallTalk(remainder);
       return respond({
         kind: "mention", subject: player.name, channel, conversational: true,
@@ -1222,6 +1229,7 @@
     "macro check, say something if ur real",
     "u real?",
     "ur macroing arent you",
+    "yo wsg 3172",
     "wsg 3172",
     "yo 3172",
     "mb g",
