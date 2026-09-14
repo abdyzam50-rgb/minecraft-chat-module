@@ -868,3 +868,33 @@ test('a greeting gets a greeting back, however it is spelled', async () => {
   assert.match(capture.params.messages[0].content, /just called my name/);
   assert.equal(said[0].message, 'nm u');
 });
+
+test('it is told not to raise things nobody mentioned', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'yeah probably', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 most people macro that tho' });
+
+  const system = capture.params.system[0].text;
+  assert.match(system, /Never bring up something they did not mention/);
+  assert.match(system, /not accusing you/);
+  const user = capture.params.messages[0].content;
+  assert.match(user, /nobody is in your way right now/, 'and knows nobody is blocking');
+});
+
+test('when someone really is blocking, the prompt says so', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    random: () => 0,
+    client: mockClient({ respond: true, message: 'move please', reason: '' }, capture),
+  });
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 1.5 }] });
+  for (let i = 0; i < 3; i += 1) {
+    await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'Dream', distance: 1.4 } });
+  }
+  assert.match(capture.params.messages[0].content, /in your way right now: Dream/);
+});

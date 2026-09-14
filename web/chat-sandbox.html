@@ -545,6 +545,35 @@
   }
 
   const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|wsp|wsg|wassup|whats\s?good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola)?[\s!?.,]*$/i;
+  const SECOND_PERSON = /\b(?:u|you|ur|your|yours|urself|yourself|yall)\b/gi;
+  const THIRD_PARTY = /\b(?:most|some|many|lots|everyone|everybody|people|they|them|their|he|she|others|anyone|someone|somebody|guy|dude|kid|player|players)\b/gi;
+
+  function lastMatchIndex(pattern, text) {
+    pattern.lastIndex = 0;
+    let index = -1, m;
+    while ((m = pattern.exec(text)) !== null) index = m.index;
+    return index;
+  }
+
+  /**
+   * "most people macro that" is a remark about the economy, not a charge
+   * against you — answering it with "im not macroing" is a non-sequitur and a
+   * confession nobody asked for. Whichever subject sits nearest the accusing
+   * word wins.
+   */
+  function accusationTarget(text, isNamed) {
+    ACCUSATION.lastIndex = 0;
+    const match = ACCUSATION.exec(text);
+    if (!match) return "none";
+    if (isNamed) return "us";
+    const before = text.slice(0, match.index).toLowerCase();
+    const second = lastMatchIndex(SECOND_PERSON, before);
+    const third = lastMatchIndex(THIRD_PARTY, before);
+    if (third > second) return "someone-else";
+    if (second >= 0) return "us";
+    return "ambiguous";
+  }
+
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
   const DETECT = {
@@ -841,6 +870,10 @@
       (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
       "",
       "Slang you know and use naturally (do not cram it in): mb, np, ty, gg, ez, ngl, fr/frfr, tbh, ikr, idk, idc, nvm, wdym, wyd, wsg/wsp/wagwan (what's good — a greeting), hbu/wbu, hru, nm/nmu (nothing much), brb, gtg, afk, lmk, ong, istg, bet, say less, no cap, sus, lowkey/highkey, mid, cracked, goated, washed, W, L, rip, F, bruh, g, twin, gang, u/ur/pls.",
+      "Answer what was actually said. Reply to the message in front of you and nothing else — never raise something they did not mention. Do not ask anyone to move unless somebody is in your way right now. Do not bring up macroing or proving you are real unless they did first. Someone talking about other players (\"most people macro that\") is not accusing you: answer the remark, do not defend yourself.",
+      state.pathfinder.blockedBy
+        ? "Right now " + shortName(state.pathfinder.blockedBy) + " is stood in your way."
+        : "Nobody is in your way right now — asking someone to move would make no sense.",
       "If you do not understand what they said — unfamiliar slang, a typo, no context — say so in the shortest way: \"uh what?\", \"what?\", \"wdym\", \"eh?\". Then let them explain. Guessing is what a bot does, and guessing wrong is far more obvious than asking.",
       "SkyBlock terms: ah (auction house), bz/baz (bazaar), bin, flip, lowball, k/m/b coins, npc price, insta-buy, mf (magic find), ms (mining speed), hotm, powder, ch (crystal hollows), div, scatha, the mist, sorrow/volta/plasma/ghostly boots (the ghost drops), cata, f1-f7, m1-m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term, gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg.",
       "Never: slurs, attacks on who someone is, anything about real life, links, a line starting with /, or \"kys\" and anything like it.",
@@ -1016,8 +1049,12 @@
     }
 
     if (ACCUSATION.test(text)) {
+      const target = accusationTarget(text, named);
+      if (target === "someone-else") {
+        // Falls through to the ordinary conversation path below.
+      } else {
       const blocking = blockCount > 0;
-      if (named || nearby || blocking) {
+      if (target === "us" || named || nearby || blocking) {
         state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
         return respond({
           kind: "accusation", subject: player.name, channel, conversational: true,
@@ -1027,6 +1064,7 @@
         });
       }
       return logEntry("skip", "accusation not aimed at me — ignored");
+      }
     }
 
     // A fair claim on the spot — they were here first, or they are mining this
@@ -1188,6 +1226,7 @@
     "yo 3172",
     "mb g",
     "3172 got any gronk stacks",
+    "most people macro that tho",
     "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",

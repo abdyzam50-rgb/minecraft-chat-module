@@ -251,6 +251,25 @@ all. Add your own with `slang.extra`, as `["gexp — guild xp"]` or
 It's also told not to overdo it: nobody uses five pieces of slang in one line,
 and a bot trying to sound casual is more obvious than one being plain.
 
+### Answering what was actually said
+
+Two ways a bot gives itself away by over-reading a message.
+
+**Taking a general remark personally.** "most people macro that tho" is a
+comment about the economy, not a charge against you — but it contains the word
+"macro", and the detector used to treat any macro talk from someone nearby as an
+accusation. Replying "im not macroing" to that is a non-sequitur *and* a
+confession nobody asked for. `accusationTarget()` now looks at which subject
+sits nearest the accusing word: "most people macro that" and "that guy is
+hacking" are about someone else; "u macro that", "you macroing?" and "im
+reporting you for macroing" are about you.
+
+**Raising something nobody mentioned.** It once tacked "move pls" onto a reply
+when nobody was anywhere near the path. The prompt now says to answer the
+message in front of it and nothing else, and the situation block states plainly
+whether anyone is actually in the way — `nobody is in your way right now — do
+not ask anyone to move` — so there's no ambiguity to fill in.
+
 ### Asking instead of guessing
 
 If it can't tell what someone meant — unfamiliar slang, a typo, a line with no
@@ -479,7 +498,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-95 tests over name shortening, chat parsing, detector thresholds, the macro-check
+100 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

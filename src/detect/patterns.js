@@ -66,6 +66,46 @@ export const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|c
 /** Real aggression, as opposed to a blunt but fair request. */
 export const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
 
+/** "u", "you", "ur" — the accusation is pointed at whoever is being spoken to. */
+const SECOND_PERSON = /\b(?:u|you|ur|your|yours|urself|yourself|yall)\b/gi;
+
+/** Someone else entirely is the subject: "most people macro that". */
+const THIRD_PARTY = /\b(?:most|some|many|lots|everyone|everybody|people|they|them|their|he|she|others|anyone|someone|somebody|guy|dude|kid|player|players|everybody)\b/gi;
+
+function lastMatchIndex(pattern, text) {
+  pattern.lastIndex = 0;
+  let index = -1;
+  let match;
+  while ((match = pattern.exec(text)) !== null) index = match.index;
+  return index;
+}
+
+/**
+ * Who is the accusation about?
+ *
+ * "most people macro that" is a remark about the economy, not a charge against
+ * you, and answering it with "im not macroing" is both a non-sequitur and a
+ * confession nobody asked for. So look at what sits in front of the accusing
+ * word: whichever subject is nearest wins.
+ *
+ * @returns {'us'|'someone-else'|'ambiguous'|'none'}
+ */
+export function accusationTarget(text, isNamed) {
+  const content = String(text ?? '');
+  ACCUSATION.lastIndex = 0;
+  const match = ACCUSATION.exec(content);
+  if (!match) return 'none';
+  if (isNamed) return 'us';
+
+  const before = content.slice(0, match.index).toLowerCase();
+  const second = lastMatchIndex(SECOND_PERSON, before);
+  const third = lastMatchIndex(THIRD_PARTY, before);
+
+  if (third > second) return 'someone-else';
+  if (second >= 0) return 'us';
+  return 'ambiguous';
+}
+
 /** Someone telling us to move / complaining about our pathing. */
 export const HOSTILE_NUDGE = new RegExp(
   ['get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away'].join('|'),

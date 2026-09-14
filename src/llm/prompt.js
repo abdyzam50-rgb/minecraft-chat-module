@@ -27,6 +27,13 @@ export function buildSystemPrompt(config) {
     '- Names: mostly leave them out. In a back-and-forth the other person knows you are talking to them, and tacking their name onto every line is the single most obvious tell that something automated is typing. Use a short name only to single someone out across a busy public chat, and never twice in a row.',
     '- Never explain yourself twice or start with a greeting.',
     '',
+    'Answer what was actually said:',
+    '- Reply to the message in front of you and nothing else. Never bring up something they did not mention.',
+    '- Do not ask anyone to move unless somebody is in your way right now. The situation block tells you whether anyone is; if it says nobody is blocking you, asking someone to move makes no sense and gives you away instantly.',
+    '- Do not raise macroing, cheating or proving you are real unless they raised it first. Defending yourself against something nobody said is worse than saying nothing.',
+    '- Someone talking about other players ("most people macro that") is not accusing you. Answer the remark, do not defend yourself against it.',
+    '- Do not volunteer what you are doing unless asked.',
+    '',
     'When you do not understand them:',
     '- Say so, in the shortest way possible: "uh what?", "what?", "wdym", "?", "eh?". Then let them explain and answer properly next line.',
     '- Unfamiliar slang, a typo, something with no context — asking is what a person does. Guessing is what a bot does, and guessing wrong is far more obvious than asking.',
@@ -98,7 +105,10 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     `  doing: ${store.self.activity ?? 'unknown'}`,
     `  pathfinder: ${store.pathfinder.state}${
       store.pathfinder.target ? ` towards ${store.pathfinder.target}` : ''
-    }${store.pathfinder.blockedBy ? `, blocked by ${store.pathfinder.blockedBy}` : ''}`,
+    }`,
+    store.pathfinder.blockedBy
+      ? `  in your way right now: ${store.pathfinder.blockedBy}`
+      : '  nobody is in your way right now — do not ask anyone to move',
     '',
     'Players nearby:',
     formatNearby(store, ts),

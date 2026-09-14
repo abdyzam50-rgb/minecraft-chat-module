@@ -213,3 +213,35 @@ test('a message that is only our name with nothing else is still an opener', () 
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', '3172'), NOW).opener, true);
 });
+
+test('talk about other people macroing is not an accusation against us', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  store.openConversation('Dream', NOW);
+
+  for (const text of [
+    'Most people macro that tho',
+    'everyone macros ghosts these days',
+    'i think some guy was macroing earlier',
+    'that guy is hacking',
+  ]) {
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.notEqual(trigger?.kind, 'accusation', `"${text}" is not about us`);
+  }
+});
+
+test('an accusation pointed at us still lands', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+
+  for (const text of ['u macro that', 'you macroing?', '3172 ur macroing', 'im reporting you for macroing']) {
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.equal(trigger?.kind, 'accusation', `"${text}" is aimed at us`);
+  }
+});
+
+test('a bare insult from someone next to us is still taken personally', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'cheater'), NOW)?.kind, 'accusation');
+});

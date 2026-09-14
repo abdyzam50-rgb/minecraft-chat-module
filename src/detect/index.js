@@ -1,6 +1,7 @@
 import { mentions, shortName } from '../chat/shortname.js';
 import {
   ACCUSATION,
+  accusationTarget,
   AGGRESSIVE,
   GREETING_ONLY,
   isSmallTalk,
@@ -132,11 +133,18 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
 
   const { requireDirected, replyWindowMs } = config.detect.accusation;
   const named = mentions(message.content, config.username, config.aliases);
+
+  // "most people macro that" is a remark about the game, not a charge against
+  // us. Defending yourself against it reads as a guilty non-sequitur.
+  const target = accusationTarget(message.content, named);
+  if (target === 'someone-else') return null;
   const nearby = store.isNearby(message.sender, config.detect.chatRadius, ts);
   const hasHistory = store.blocksWithin(message.sender, 120000, ts) > 0;
   const repliedToUs = store.lastOutgoing && ts - store.lastOutgoing.ts <= replyWindowMs;
 
-  const directed = named || nearby || hasHistory || repliedToUs;
+  // Pointed straight at us ("u macroing?") needs no further corroboration.
+  // Anything vaguer has to be plausibly aimed at us by the situation.
+  const directed = target === 'us' || named || nearby || hasHistory || repliedToUs;
   if (requireDirected && !directed) return null;
 
   const priors = (store.players.get(message.sender)?.accusations ?? []).filter(
