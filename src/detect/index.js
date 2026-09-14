@@ -94,7 +94,7 @@ export function detectMacroCheckTalk(store, config, message, ts = Date.now()) {
   if (!MACRO_CHECK_TALK.test(message.content)) return null;
 
   const settings = config.detect.pathfinder;
-  const nearby = store.isNearby(message.sender, settings.radius * 3, ts);
+  const nearby = store.isNearby(message.sender, config.detect.chatRadius, ts);
   const named = mentions(message.content, config.username, config.aliases);
   if (!nearby && !named) return null;
 
@@ -127,7 +127,7 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
 
   const { requireDirected, replyWindowMs } = config.detect.accusation;
   const named = mentions(message.content, config.username, config.aliases);
-  const nearby = store.isNearby(message.sender, config.detect.pathfinder.radius * 3, ts);
+  const nearby = store.isNearby(message.sender, config.detect.chatRadius, ts);
   const hasHistory = store.blocksWithin(message.sender, 120000, ts) > 0;
   const repliedToUs = store.lastOutgoing && ts - store.lastOutgoing.ts <= replyWindowMs;
 
@@ -169,7 +169,7 @@ export function detectSpotClaim(store, config, message, ts = Date.now()) {
   if (AGGRESSIVE.test(message.content) && !polite) return null;
 
   const named = mentions(message.content, config.username, config.aliases);
-  if (!named && !store.isNearby(message.sender, config.detect.pathfinder.radius * 4, ts)) {
+  if (!named && !store.isNearby(message.sender, config.detect.spotClaimRadius, ts)) {
     return null;
   }
 
@@ -195,7 +195,7 @@ export function detectHostile(store, config, message, ts = Date.now()) {
   if (config.ignore.includes(message.sender)) return null;
   if (!HOSTILE_NUDGE.test(message.content)) return null;
   if (!mentions(message.content, config.username, config.aliases) &&
-      !store.isNearby(message.sender, config.detect.pathfinder.radius * 3, ts)) {
+      !store.isNearby(message.sender, config.detect.chatRadius, ts)) {
     return null;
   }
 

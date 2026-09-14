@@ -30,6 +30,8 @@
   },
 
   "detect": {
+    "chatRadius": 12,
+    "spotClaimRadius": 20,
     "pathfinder": {
       "threshold": 3,
       "windowMs": 45000,

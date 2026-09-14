@@ -160,3 +160,25 @@ test('a claim from someone across the lobby is not ours to answer', () => {
   const trigger = detectFromChat(store, config, chat('Stranger', 'i was here first'), NOW);
   assert.equal(trigger, null);
 });
+
+test('a bare "move i was here first" works without naming us', () => {
+  const { config, store } = setup();
+  const text = 'move i was here first';
+
+  for (const distance of [1.8, 6.4, 12.1, 19]) {
+    store.updateNearby([{ name: 'Miner', distance }], NOW);
+    const trigger = detectFromChat(store, config, chat('Miner', text), NOW);
+    assert.equal(trigger?.kind, 'spot_claim', `should fire at ${distance}m`);
+  }
+
+  // Far enough away that they are probably talking to someone else.
+  store.updateNearby([{ name: 'Miner', distance: 30 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Miner', text), NOW), null);
+});
+
+test('a distant claim still counts when it names us', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Miner', distance: 40 }], NOW);
+  const trigger = detectFromChat(store, config, chat('Miner', 'techno move i was here first'), NOW);
+  assert.equal(trigger?.kind, 'spot_claim');
+});

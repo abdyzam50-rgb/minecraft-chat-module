@@ -101,6 +101,14 @@ export const DEFAULTS = {
       patience: [4, 7],
       rage: [2, 4],
     },
+    /** How far away someone can be and still plausibly be talking to us. */
+    chatRadius: 12,
+    /**
+     * Spot claims reach further: someone contesting a ghost spawn can easily
+     * be fifteen or twenty blocks off and still mean you.
+     */
+    spotClaimRadius: 20,
+
     accusation: {
       /** Only fire if the accuser is nearby, mentioned us, or just talked to us. */
       requireDirected: true,

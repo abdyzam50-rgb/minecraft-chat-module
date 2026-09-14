@@ -529,7 +529,11 @@
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
-  const DETECT = { threshold: 3, windowMs: 45000, radius: 4, patience: [4, 7], rage: [2, 4] };
+  const DETECT = {
+    threshold: 3, windowMs: 45000, radius: 4, patience: [4, 7], rage: [2, 4],
+    chatRadius: 12,      // close enough to plausibly be talking to us
+    spotClaimRadius: 20, // a spot claim reaches further
+  };
   const LIMITS = {
     globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
     maxPerMinute: 4, maxConsecutivePerPlayer: 2, dedupeWindowMs: 300000,
@@ -921,12 +925,14 @@
   async function incoming(player, text, channel) {
     sayAs(player, text, channel);
     const ts = Date.now();
-    const nearby = player.distance <= DETECT.radius * 3;
+    const nearby = player.distance <= DETECT.chatRadius;
+    const nearForClaim = player.distance <= DETECT.spotClaimRadius;
+    const named = mentions(text, SELF);
     const blockCount = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
 
     // Most specific reading wins: "macro check, say something" matches the
     // accusation pattern too, but answering it on the ladder is the better reply.
-    if (MACRO_CHECK_TALK.test(text) && (nearby || mentions(text, SELF))) {
+    if (MACRO_CHECK_TALK.test(text) && (nearby || named)) {
       state.blocks[player.name] = (state.blocks[player.name] || []).concat(ts);
       renderRoster();
       return macroCheck(player, Math.max(DETECT.threshold, blockCount + 1), text);
@@ -934,7 +940,7 @@
 
     if (ACCUSATION.test(text)) {
       const blocking = blockCount > 0;
-      if (mentions(text, SELF) || nearby || blocking) {
+      if (named || nearby || blocking) {
         state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
         return respond({
           kind: "accusation", subject: player.name, channel,
@@ -948,7 +954,7 @@
 
     // A fair claim on the spot — they were here first, or they are mining this
     // vein. Give way; arguing with a reasonable person is what a bot would do.
-    if (SPOT_CLAIM.test(text) && (nearby || mentions(text, SELF)) &&
+    if (SPOT_CLAIM.test(text) && (nearForClaim || named) &&
         !(AGGRESSIVE.test(text) && !POLITE.test(text))) {
       return respond({
         kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate",
@@ -957,7 +963,7 @@
       });
     }
 
-    if (HOSTILE.test(text) && (mentions(text, SELF) || nearby)) {
+    if (HOSTILE.test(text) && (named || nearby)) {
       return respond({
         kind: "hostile", subject: player.name, channel,
         evidence: shortName(player.name) + " told me to move while standing next to me",
@@ -970,6 +976,29 @@
         evidence: shortName(player.name) + " used my name",
       });
     }
+
+    explainSilence(player, text);
+  }
+
+  /**
+   * Nothing fired. Say why — a sandbox that goes quiet without explaining
+   * itself is indistinguishable from one that is broken.
+   */
+  function explainSilence(player, text) {
+    const matched = [];
+    if (SPOT_CLAIM.test(text)) matched.push("a spot claim");
+    if (ACCUSATION.test(text)) matched.push("an accusation");
+    if (MACRO_CHECK_TALK.test(text)) matched.push("a macro check");
+    if (HOSTILE.test(text)) matched.push("hostility");
+
+    if (!matched.length) {
+      return logEntry("skip", "nothing in that was aimed at me — stayed out of it");
+    }
+    const claimOnly = matched.length === 1 && matched[0] === "a spot claim";
+    const limit = claimOnly ? DETECT.spotClaimRadius : DETECT.chatRadius;
+    logEntry("skip", "that reads as " + matched.join(" and ") + ", but " +
+      shortName(player.name) + " is " + player.distance.toFixed(1) + "m away (needs " +
+      limit + "m) and didn't use my name — could be talking to anyone");
   }
 
   /** Shared by the block button and by "u real?" in chat. */
@@ -1083,7 +1112,7 @@
   }
 
   el("speaker").innerHTML = PLAYERS.map((p, i) =>
-    '<option value="' + i + '">as ' + escapeHtml(p.name) + "</option>").join("");
+    '<option value="' + i + '">as ' + escapeHtml(p.name) + " (" + p.distance.toFixed(1) + "m)</option>").join("");
 
   el("presets").innerHTML = PRESETS.map((p) =>
     '<button type="button" data-preset="' + escapeHtml(p) + '">' + escapeHtml(p) + "</button>").join("") +
