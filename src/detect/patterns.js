@@ -76,7 +76,8 @@ export const HOSTILE_NUDGE = new RegExp(
  * A greeting with nothing else in it. "yo 3172" is not a question — it wants
  * "?" or "yh?" back, not a sentence about ghost drops.
  */
-export const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|hell+o+|sup|wsup|oi+|psst|a+y+o*|heya|hiya|yo+)?[\s!?.,]*$/i;
+export const GREETING_ONLY =
+  /^(?:y+o+|h+e+y+|h+i+|hello|hell+o+|sup|wsup|wsp|wsg|wassup|whats\s?good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|yo+)?[\s!?.,]*$/i;
 
 /**
  * Words that carry no content on their own. A message made entirely of these
@@ -107,9 +108,19 @@ export function isSmallTalk(text) {
   return words.length > 0 && words.every((word) => FILLER_WORDS.has(word));
 }
 
+/**
+ * Shorthand questions. These are three letters long and carry a real question,
+ * so they must not be mistaken for noise.
+ */
+export const SHORT_QUESTION = /^(?:wyd|wbu|hbu|wu|hru|u\s?(?:good|ok|gud)|ya\s?good)[\s!?.]*$/i;
+
 /** A question aimed at us. */
 export function looksLikeQuestion(text) {
-  return /\?\s*$/.test(text) || /^(what|why|how|who|where|when|are|is|do|does|can|u\s|you\s)/i.test(text);
+  return (
+    /\?\s*$/.test(text) ||
+    SHORT_QUESTION.test(String(text ?? '').trim()) ||
+    /^(what|why|how|who|where|when|are|is|do|does|can|u\s|you\s)/i.test(text)
+  );
 }
 
 /** Hypixel telling us we've been muted or warned — always stop talking. */

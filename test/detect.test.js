@@ -7,7 +7,7 @@ import { detectFromChat, detectPathfinderBlock, detectMuted } from '../src/detec
 const NOW = 1_700_000_000_000;
 
 function setup(overrides = {}, random = () => 0) {
-  const config = resolveConfig({ username: 'Technoblade', ...overrides });
+  const config = resolveConfig({ username: overrides.username ?? 'Technoblade', ...overrides });
   const store = new ContextStore({ now: () => NOW, random });
   store.updateSelf({ username: config.username });
   return { config, store };
@@ -181,4 +181,35 @@ test('a distant claim still counts when it names us', () => {
   store.updateNearby([{ name: 'Miner', distance: 40 }], NOW);
   const trigger = detectFromChat(store, config, chat('Miner', 'techno move i was here first'), NOW);
   assert.equal(trigger?.kind, 'spot_claim');
+});
+
+test('short slang is answered, not dropped as noise', () => {
+  const { config, store } = setup();
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  store.openConversation('Dream', NOW);
+
+  const kinds = {};
+  for (const text of ['wsg', 'wyd', 'hbu', 'idk', 'gg', 'k']) {
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.ok(trigger, `"${text}" must get a reply, not silence`);
+    kinds[text] = trigger.opener ? 'opener' : trigger.smalltalk ? 'smalltalk' : 'mention';
+  }
+
+  assert.equal(kinds.wsg, 'opener', 'a greeting, however it is spelled');
+  assert.equal(kinds.wyd, 'mention', 'but "what you doing" is a real question');
+  assert.equal(kinds.hbu, 'mention');
+  assert.equal(kinds.gg, 'smalltalk');
+});
+
+test('"wsg 3172" is a greeting, not an essay prompt', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  const trigger = detectFromChat(store, config, chat('Dream', 'wsg 3172'), NOW);
+  assert.equal(trigger.opener, true);
+});
+
+test('a message that is only our name with nothing else is still an opener', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172'), NOW).opener, true);
 });

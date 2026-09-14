@@ -832,3 +832,39 @@ test('slang can be switched off', async () => {
 
   assert.doesNotMatch(capture.params.system[0].text, /bazaar/);
 });
+
+test('it asks rather than guesses when it does not understand', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'uh what?', reason: 'no idea what that means' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 you got any gronk stacks left' });
+
+  const system = capture.params.system[0].text;
+  assert.match(system, /When you do not understand them/);
+  assert.match(system, /uh what\?/);
+  assert.match(system, /Guessing is what a bot does/);
+  assert.equal(said[0].message, 'uh what?');
+});
+
+test('a greeting gets a greeting back, however it is spelled', async () => {
+  const capture = {};
+  const ai = createChatAI({
+    username: '3172',
+    client: mockClient({ respond: true, message: 'nm u', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: wsg 3172' });
+
+  assert.equal(said.length, 1, '"wsg" must not fall through the cracks');
+  assert.match(capture.params.messages[0].content, /just called my name/);
+  assert.equal(said[0].message, 'nm u');
+});

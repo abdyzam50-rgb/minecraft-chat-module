@@ -251,6 +251,29 @@ all. Add your own with `slang.extra`, as `["gexp — guild xp"]` or
 It's also told not to overdo it: nobody uses five pieces of slang in one line,
 and a bot trying to sound casual is more obvious than one being plain.
 
+### Asking instead of guessing
+
+If it can't tell what someone meant — unfamiliar slang, a typo, a line with no
+context — it says so in the shortest way: `uh what?`, `what?`, `wdym`, `eh?`.
+Then the other person explains and it answers properly on the next line.
+
+That's what a person does. Guessing is what a bot does, and guessing *wrong* is
+far more obvious than asking. The prompt also forbids the two bluffing moves
+that usually replace a real answer: answering a question nobody asked, and
+producing a vague line that could follow anything.
+
+### Short slang is not noise
+
+`wsg`, `wyd`, `hbu`, `idk`, `gg`, `ty` are three characters and every one of
+them wants a reply. A length gate used to drop them all, so "wsg" got silence.
+Now they route by meaning:
+
+| | |
+|---|---|
+| `wsg`, `wsp`, `wagwan` | a greeting — `opener`, answered with `sup` / `nm u` |
+| `wyd`, `hbu`, `hru` | real questions — answered properly |
+| `gg`, `k`, `mb` | filler — a token back, or nothing |
+
 ### Two words means two words
 
 Some replies have to be tiny — a bare call-out, an acknowledgement. Asking the
@@ -456,7 +479,7 @@ bin/simulate.js         replay a scenario with no Minecraft
 npm test
 ```
 
-90 tests over name shortening, chat parsing, detector thresholds, the macro-check
+95 tests over name shortening, chat parsing, detector thresholds, the macro-check
 escalation ladder, near-duplicate detection, the rewrite-on-repeat path, the
 typing model, conversation continuity and turn budgets, one-word openers, filler replies, name fatigue, the rate limiter, sanitisation, the bridge, and the full
 event→reply path with a mocked API client. No test hits the network.

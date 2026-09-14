@@ -235,7 +235,6 @@ export function detectMention(store, config, message, ts = Date.now()) {
     store.isNearby(message.sender, config.detect.chatRadius, ts);
 
   if (!named && !continuing && !(isWhisper && config.detect.mention.answerWhispers)) return null;
-  if (!isWhisper && !looksLikeQuestion(message.content) && message.content.length < 4) return null;
 
   // Strip our name out and see whether anything was actually said.
   const remainder = [config.username, shortName(config.username), ...config.aliases]
@@ -246,6 +245,11 @@ export function detectMention(store, config, message, ts = Date.now()) {
   const opener = GREETING_ONLY.test(remainder);
   // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
   const smalltalk = !opener && isSmallTalk(remainder);
+
+  // Nothing left once the name is gone and it is not a greeting — nothing to
+  // answer. (A short message is not the same as an empty one: "wsg" and "idk"
+  // are three characters and both want a reply.)
+  if (!remainder && !opener) return null;
 
   return {
     kind: isWhisper ? 'whisper' : 'mention',

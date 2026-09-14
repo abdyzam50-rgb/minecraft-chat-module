@@ -449,6 +449,7 @@
       hostile: ["all good, i'll path around you", "no problem, moving on"],
       opener: ["yh?", "?", "sup", "whats up"],
       smalltalk: ["all g", "no worries", "all good", "np"],
+      confused: ["uh what?", "sorry what?", "wdym?", "eh?"],
       mention: ["just grinding ghosts", "ghosts in the mist", "grinding ghosts, you?"],
     },
     snarky: {
@@ -467,6 +468,7 @@
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
       opener: ["?", "yh?", "what", "wha"],
       smalltalk: ["all g", "np", "cool", "yh"],
+      confused: ["uh what?", "what?", "wdym", "eh?"],
       mention: ["just grinding ghosts", "ghosts, same as ever", "grinding ghosts. you?"],
     },
     unfiltered: {
@@ -485,6 +487,7 @@
       hostile: ["piss off, it's a public lobby", "get lost"],
       opener: ["?", "what", "wha", "yh"],
       smalltalk: ["all g", "np", "yh", "cool"],
+      confused: ["what?", "uh what", "wdym", "eh?"],
       mention: ["just grinding ghosts mate", "grinding ghosts", "ghosts, what else"],
     },
   };
@@ -541,7 +544,7 @@
     return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
   }
 
-  const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|oi+|psst|a+y+o*|heya|hiya)?[\s!?.,]*$/i;
+  const GREETING_ONLY = /^(?:y+o+|h+e+y+|h+i+|hello|sup|wsup|wsp|wsg|wassup|whats\s?good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola)?[\s!?.,]*$/i;
   const MACRO_CHECK_TALK = /\bmacro\s?check|\b(?:u|you|ur|are\s?(?:u|you))\s+(?:real|afk|alive|human|a\s?bot)\b|\b(?:say|type|do)\s+(?:something|smth|anything)\b|\b(?:react|respond)\b|\bhit\s?me\s?if\b|\bmove\s?if\s?(?:u|you|ur)\b|\bchecking\s+(?:if|u|you)\b/i;
 
   const DETECT = {
@@ -837,7 +840,8 @@
       "Tone right now: " + tone + ".",
       (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
       "",
-      "Slang you know and use naturally (do not cram it in): mb, np, ty, gg, ez, ngl, fr, tbh, ikr, idk, nvm, wdym, wyd, wsg, brb, gtg, afk, lmk, ong, bet, no cap, sus, lowkey, mid, cracked, goated, W, L, rip, bruh, g, twin, u/ur/pls.",
+      "Slang you know and use naturally (do not cram it in): mb, np, ty, gg, ez, ngl, fr/frfr, tbh, ikr, idk, idc, nvm, wdym, wyd, wsg/wsp/wagwan (what's good — a greeting), hbu/wbu, hru, nm/nmu (nothing much), brb, gtg, afk, lmk, ong, istg, bet, say less, no cap, sus, lowkey/highkey, mid, cracked, goated, washed, W, L, rip, F, bruh, g, twin, gang, u/ur/pls.",
+      "If you do not understand what they said — unfamiliar slang, a typo, no context — say so in the shortest way: \"uh what?\", \"what?\", \"wdym\", \"eh?\". Then let them explain. Guessing is what a bot does, and guessing wrong is far more obvious than asking.",
       "SkyBlock terms: ah (auction house), bz/baz (bazaar), bin, flip, lowball, k/m/b coins, npc price, insta-buy, mf (magic find), ms (mining speed), hotm, powder, ch (crystal hollows), div, scatha, the mist, sorrow/volta/plasma/ghostly boots (the ghost drops), cata, f1-f7, m1-m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term, gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg.",
       "Never: slurs, attacks on who someone is, anything about real life, links, a line starting with /, or \"kys\" and anything like it.",
       "Never mention being an AI.",
@@ -1180,8 +1184,10 @@
     "macro check, say something if ur real",
     "u real?",
     "ur macroing arent you",
+    "wsg 3172",
     "yo 3172",
     "mb g",
+    "3172 got any gronk stacks",
     "excuse me 3172 i was here first",
     "what you upto 3172?",
     "hey 3172 nice cape",
