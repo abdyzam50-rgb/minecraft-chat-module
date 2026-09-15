@@ -8,18 +8,15 @@
   // src/index.js, which is what serves /api/reply and /health.
   "assets": { "directory": "./public" },
   // LLM_PROVIDER picks the upstream: "openai" is the wire format, not the
-  // vendor, and points at OPENAI_BASE_URL with the TOKENROUTER_API_KEY secret.
+  // vendor, so this points at OpenRouter with the gateway key secret.
+  // Set it to "gemini" to fall back to GEMINI_MODEL and GEMINI_API_KEY.
   //
-  // On "gemini" while the TokenRouter key is sorted out: api.tokenrouter.com
-  // answered "401: Invalid token", which is the key value, not the wiring —
-  // the gateway read our Bearer header and refused it. Note there are two
-  // unrelated services with this name: api.tokenrouter.com (the one with
-  // z-ai/glm-5.3-free) and api.tokenrouter.io (keys prefixed tr_). A key from
-  // one is an invalid token at the other.
+  // Free models here are capped at 20 requests a minute and 50 a day, or
+  // 1000 a day once the account has ever bought $10 of credits.
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
-    "LLM_PROVIDER": "gemini",
-    "OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
-    "OPENAI_MODEL": "z-ai/glm-5.3-free"
+    "LLM_PROVIDER": "openai",
+    "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
+    "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free"
   }
 }

@@ -34,11 +34,11 @@ const THINK_BLOCK = /<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi;
 
 /**
  * The gateway key, under whichever name it was stored. "openai" here is the
- * wire format, not the vendor, so the key usually belongs to TokenRouter or
- * OpenRouter and is named after them.
+ * wire format, not the vendor, so the key usually belongs to OpenRouter or a
+ * similar gateway and is named after it.
  */
 function gatewayKey(env) {
-  const key = env.TOKENROUTER_API_KEY || env.OPENROUTER_API_KEY || env.OPENAI_API_KEY || '';
+  const key = env.OPENROUTER_API_KEY || env.TOKENROUTER_API_KEY || env.OPENAI_API_KEY || '';
   // Trimmed because a key pasted into a repo secret often carries a trailing
   // newline, and the gateway rejects that as "Invalid token" — which reads as
   // a wrong key rather than a whitespace problem.
@@ -88,7 +88,7 @@ export default {
       return json({ error: 'not found' }, 404, headers);
     }
     if (!key) {
-      const name = provider === 'openai' ? 'TOKENROUTER_API_KEY' : 'GEMINI_API_KEY';
+      const name = provider === 'openai' ? 'OPENROUTER_API_KEY' : 'GEMINI_API_KEY';
       return json({ error: `server is missing ${name}` }, 500, headers);
     }
 
@@ -147,7 +147,7 @@ async function replyFromGemini(env, model, key, prompt) {
 }
 
 async function replyFromOpenAI(env, model, key, prompt) {
-  const baseUrl = (env.OPENAI_BASE_URL || 'https://api.tokenrouter.com/v1').replace(/\/$/, '');
+  const baseUrl = (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
 
   // Structured-output support varies wildly between models behind these
   // gateways. A model that rejects the schema usually still honours
@@ -193,9 +193,16 @@ function callGemini(model, key, prompt, thinkingConfig) {
 }
 
 function callOpenAI(baseUrl, model, key, prompt, withSchema) {
+  const headers = { 'content-type': 'application/json', authorization: `Bearer ${key}` };
+  // OpenRouter attributes usage to whatever sends these, which is how you tell
+  // this site apart from anything else on the same key.
+  if (baseUrl.includes('openrouter.ai')) {
+    headers['HTTP-Referer'] = 'https://minecraft-chat-gemini.abdyzam50.workers.dev';
+    headers['X-Title'] = 'Minecraft chat AI sandbox';
+  }
   return fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    headers,
     body: JSON.stringify({
       model,
       max_tokens: 800,

@@ -55,11 +55,11 @@ Ollama or LM Studio — is the same adapter with a different `baseUrl`.
 
 ```jsonc
 { "llm": { "provider": "openai",
-           "baseUrl": "https://api.tokenrouter.com/v1",
-           "model": "z-ai/glm-5.3-free" } }   // TOKENROUTER_API_KEY
+           "baseUrl": "https://openrouter.ai/api/v1",
+           "model": "google/gemma-4-26b-a4b-it:free" } }  // OPENROUTER_API_KEY
 { "llm": { "provider": "openai",
            "baseUrl": "http://127.0.0.1:11434/v1",
-           "model": "llama3.1" } }            // no key needed, but set one anyway
+           "model": "llama3.1" } }                        // no key needed
 ```
 
 `llm.model` is required for this provider and there's no default: the gateway
@@ -188,18 +188,21 @@ edit:
 With no `LLM_PROVIDER` at all it uses whichever key is configured, preferring
 Gemini.
 
-**Two unrelated services are called TokenRouter**, and a key from one is an
-invalid token at the other:
+**A gateway key only works at the gateway that issued it**, and the failure says
+almost nothing useful. An OpenRouter key sent to `api.tokenrouter.com` comes back
+`401: Invalid token` — not "wrong service", just invalid, which reads like a
+mistyped key. Worth knowing there are two unrelated services called TokenRouter
+as well (`api.tokenrouter.com`, and `api.tokenrouter.io` whose keys are prefixed
+`tr_`), so "it's a TokenRouter key" does not settle which host to call.
 
-| host | keys | has |
-|---|---|---|
-| `api.tokenrouter.com` | no fixed prefix | `z-ai/glm-5.3-free`, `nvidia/nemotron-…:free` |
-| `api.tokenrouter.io` | `tr_…` | `auto:balance` and friends |
+Check the model id belongs to the gateway too. `z-ai/glm-5.3-free` is a
+TokenRouter id; OpenRouter has no free GLM at all, and its free variants are
+suffixed `:free`. `curl https://openrouter.ai/api/v1/models` needs no key and
+lists exactly what exists.
 
-Their unauthenticated errors tell them apart — `.com` says "Token not provided",
-`.io` says "Pass 'Authorization: Bearer tr_...'". An hour went into a `401:
-Invalid token` that was neither the URL nor the wiring: the gateway had read the
-Bearer header fine and simply refused the value. `/health` reports the provider and model it
+Free models there allow **20 requests a minute and 50 a day**, or 1000 a day once
+the account has ever bought $10 of credits — so a free gateway relaxes the limit
+rather than removing it. `/health` reports the provider and model it
 resolved, and the page puts the model name in its status line — when you are
 comparing how two models write "yh?", you want to know which one you are looking
 at without reading the deploy log.

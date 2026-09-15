@@ -24,14 +24,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           missing=""
           [ -n "$CLOUDFLARE_API_TOKEN" ]  || missing="$missing CF_API_TOKEN"
           [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
           # Either upstream will do. The Worker prefers Gemini when both are
           # set, unless LLM_PROVIDER in wrangler.jsonc says otherwise.
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$TOKENROUTER_API_KEY" ]; then
-            missing="$missing GEMINI_API_KEY-or-TOKENROUTER_API_KEY"
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$TOKENROUTER_API_KEY" ] && [ -z "$OPENROUTER_API_KEY" ]; then
+            missing="$missing GEMINI_API_KEY-or-OPENROUTER_API_KEY"
           fi
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing"
@@ -87,14 +88,20 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           # Whichever are configured. Setting both is fine and makes switching
           # provider a wrangler.jsonc edit rather than a secrets change.
           if [ -n "$GEMINI_API_KEY" ]; then
             printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY
           fi
+          # The gateway key under either name, so renaming the repo secret
+          # from TOKENROUTER_API_KEY to OPENROUTER_API_KEY does not break it.
           if [ -n "$TOKENROUTER_API_KEY" ]; then
             printf '%s' "$TOKENROUTER_API_KEY" | npx wrangler secret put TOKENROUTER_API_KEY
+          fi
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            printf '%s' "$OPENROUTER_API_KEY" | npx wrangler secret put OPENROUTER_API_KEY
           fi
 
       - name: Check the deployed site answers
