@@ -129,24 +129,41 @@ as a local file it falls back to the canned lines and says so.
 
 ### GitHub Pages sandbox with Gemini
 
-`web/` is ready to publish with GitHub Pages. The page never contains a Gemini
-key: it sends its reply prompt to the small Worker in `cloudflare-worker/`, and
-the Worker makes the Gemini request server-side.
+`web/` publishes the same sandbox to GitHub Pages. It is the identical HTML the
+Artifact runs — the only difference is `config.js`:
 
-1. In Cloudflare, create a Worker from `cloudflare-worker/` and deploy it. Its
-   entry point is `src/index.js`.
-2. In that Worker's **Settings → Variables and Secrets**, add a **Secret** named
-   `GEMINI_API_KEY`. Optionally add the plaintext `ALLOWED_ORIGIN` variable as
-   your final Pages URL, such as `https://abdyzam50-rgb.github.io`.
-3. Copy the Worker URL (for example `https://minecraft-chat-gemini.<account>.workers.dev`)
-   into `web/config.js` as `window.MCCHAT_API_URL` — this URL is safe to commit.
-4. In GitHub repository **Settings → Pages**, deploy from the `web/` directory.
-   The published root opens the sandbox automatically.
+| `window.MCCHAT_API_URL` | Where replies come from |
+|---|---|
+| a Worker URL | Gemini, through the Worker (GitHub Pages) |
+| empty, inside an Artifact | the viewer's own Claude, via `claude.use("sample")` |
+| empty, anywhere else | the canned offline lines |
 
-The Worker URL is intentionally public, so keep this deployment for testing
-unless you add Cloudflare Access or another server-side authorization layer.
-`ALLOWED_ORIGIN` prevents other websites' browsers from reading replies, but
-does not authenticate direct requests.
+The page never holds a Gemini key. It posts its prompt to the Worker in
+`cloudflare-worker/`, which makes the Gemini call server-side.
+
+`.github/workflows/deploy-test-site.yml` does both deployments on a push. It
+needs three repository secrets — `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`GEMINI_API_KEY` — and checks for them before doing anything, so a missing one
+names itself instead of failing halfway.
+
+**One manual step first.** A Cloudflare account cannot publish to
+`*.workers.dev` until it has claimed a subdomain, and that is a dashboard click
+no API token can do:
+
+> Cloudflare dashboard → **Workers & Pages** → pick a subdomain
+
+Without it `wrangler deploy` exits with *"You need to register a workers.dev
+subdomain"*. The workflow detects that exact message and says so in the run
+summary rather than leaving you to read the log.
+
+The Worker job is `continue-on-error`, and Pages deploys either way. A broken or
+undeployed Worker therefore costs you the live replies, not the site: the page
+health-checks the Worker on load, and falls back to canned lines with the status
+chip reading `offline · lines repeat`.
+
+The Worker URL is public by design, so keep this deployment for testing unless
+you put Cloudflare Access in front of it. `ALLOWED_ORIGIN` stops other websites'
+browsers from reading replies; it does not authenticate direct requests.
 
 ### Hooking up the client
 

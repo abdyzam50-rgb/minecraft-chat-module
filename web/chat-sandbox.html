@@ -1,5 +1,5 @@
 <title>Hypixel Chat Sandbox</title>
-<script src="./config.js"></script>
+<script src="config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -849,7 +849,8 @@
 
   let sampleFn = null;   // resolved claude.use("sample"), or null
   let liveReady = false;
-  const workerApiUrl = String(window.MCCHAT_API_URL || "").replace(/\/$/, "");
+  // Cleared if the Worker cannot be reached, so writeLine stops trying it.
+  let workerApiUrl = String(window.MCCHAT_API_URL || "").replace(/\/$/, "");
 
   function setLive(on, label) {
     liveReady = on;
@@ -862,12 +863,19 @@
     if (workerApiUrl) {
       try {
         const health = await fetch(workerApiUrl + "/health");
-        if (!health.ok) throw new Error("health check failed");
+        if (!health.ok) throw new Error("health check returned " + health.status);
+        const status = await health.json().catch(function () { return {}; });
+        if (status.keyConfigured === false) {
+          throw new Error("the Worker has no GEMINI_API_KEY set");
+        }
         setLive(true, "live · Gemini via Worker");
         return;
       } catch (error) {
-        setLive(false, "Worker unavailable · canned lines");
-        logEntry("skip", "Gemini Worker could not be reached — falling back to canned lines");
+        // Forget the URL, otherwise every reply keeps calling a Worker we
+        // already know is down while the label claims we fell back.
+        workerApiUrl = "";
+        setLive(false, "offline · lines repeat");
+        logEntry("skip", "Gemini Worker unreachable (" + error.message + ") — using canned lines");
         return;
       }
     }
@@ -975,8 +983,10 @@
         }
         return { source: "gemini", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)), reason: reply.reason };
       } catch (error) {
-        logEntry("skip", "Gemini Worker failed (" + error.message + ")");
-        return { source: "gemini", message: null, reason: "Worker unavailable" };
+        logEntry("skip", "Gemini Worker failed (" + error.message + ") — using canned lines from here");
+        workerApiUrl = "";
+        setLive(false, "offline · lines repeat");
+        return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
       }
     }
     if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
