@@ -814,7 +814,7 @@ test('the prompt carries the slang it needs to read and write', async () => {
   await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 hows the mf looking' });
 
   const system = capture.params.system[0].text;
-  for (const term of ['mf — magic find', 'bz / baz — bazaar', 'hotm — heart of the mountain', 'ngl', 'sorrow / volta / plasma']) {
+  for (const term of ['mf — magic find', 'bz / baz — bazaar', 'hotm — heart of the mountain', 'ngl', 'sorrow / volta / plasma', 'pmo — context-dependent', 'lbin — lowest current buy-it-now', 'kuudra — Crimson Isle boss']) {
     assert.ok(system.includes(term), `missing "${term}"`);
   }
   assert.match(system, /gexp — guild xp/, 'user additions land too');
