@@ -42,8 +42,13 @@ jobs:
           // Served by the Worker, so the API is this same origin.
           window.MCCHAT_API_URL = location.origin;
           JS
-          # Serve the sandbox at / directly instead of redirecting to it.
-          cp web/chat-sandbox.html cloudflare-worker/public/index.html
+          # chat-sandbox.html is an Artifact *source*: no doctype and no head,
+          # because the platform supplies them. Served raw it has no charset, so
+          # the browser reads UTF-8 as Latin-1 and every dash and emoji breaks.
+          # Wrap it for this host, and serve it at / with no redirect hop.
+          node web/build-standalone.mjs web/chat-sandbox.html cloudflare-worker/public/index.html
+          cp cloudflare-worker/public/index.html cloudflare-worker/public/chat-sandbox.html
+          grep -q '<meta charset="utf-8">' cloudflare-worker/public/index.html
           ls -1 cloudflare-worker/public
 
       - name: Deploy Worker and site
@@ -83,9 +88,10 @@ jobs:
           for attempt in 1 2 3 4 5 6; do
             health="$(curl -fsSL "$WORKER_URL/health" || true)"
             page="$(curl -fsSL -o /dev/null -w '%{http_code}' "$WORKER_URL/" || true)"
-            echo "attempt $attempt: health=$health page=$page"
-            case "$health:$page" in
-              *'"keyConfigured":true'*:200) ok=1; break ;;
+            charset="$(curl -fsSL "$WORKER_URL/" | grep -c 'meta charset="utf-8"' || true)"
+            echo "attempt $attempt: health=$health page=$page charset=$charset"
+            case "$health:$page:$charset" in
+              *'"keyConfigured":true'*:200:1) ok=1; break ;;
             esac
             sleep 5
           done
