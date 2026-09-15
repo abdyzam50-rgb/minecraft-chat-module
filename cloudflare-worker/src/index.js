@@ -37,12 +37,40 @@ const THINK_BLOCK = /<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi;
  * wire format, not the vendor, so the key usually belongs to OpenRouter or a
  * similar gateway and is named after it.
  */
+const GATEWAY_KEY_NAMES = ['OPENROUTER_API_KEY', 'TOKENROUTER_API_KEY', 'OPENAI_API_KEY'];
+
+function gatewayKeyName(env) {
+  return GATEWAY_KEY_NAMES.find((name) => (env[name] || '').trim());
+}
+
 function gatewayKey(env) {
-  const key = env.OPENROUTER_API_KEY || env.TOKENROUTER_API_KEY || env.OPENAI_API_KEY || '';
+  const name = gatewayKeyName(env);
   // Trimmed because a key pasted into a repo secret often carries a trailing
-  // newline, and the gateway rejects that as "Invalid token" — which reads as
-  // a wrong key rather than a whitespace problem.
-  return key.trim();
+  // newline, and a gateway rejects that as "Invalid token" — which reads as a
+  // wrong key rather than a whitespace problem.
+  return name ? env[name].trim() : '';
+}
+
+/**
+ * Everything about the key except the key.
+ *
+ * A header value with a space, newline or non-ASCII character in the middle is
+ * not sent at all, and the gateway then reports a *missing* Authorization
+ * header — which reads as code that forgot to set one. Length and shape
+ * identify that in one request without putting a secret in a response.
+ */
+function keyShape(env) {
+  const name = gatewayKeyName(env);
+  if (!name) return { source: null };
+  const key = env[name].trim();
+  return {
+    source: name,
+    length: key.length,
+    // Every gateway key is printable ASCII with no spaces. Anything else is
+    // what broke the header.
+    headerSafe: /^[\x21-\x7e]+$/.test(key),
+    prefix: key.slice(0, 3),
+  };
 }
 
 /**
@@ -122,6 +150,7 @@ export default {
           provider,
           model: attempts[0]?.model ?? null,
           chain: attempts.map((attempt) => `${attempt.provider}:${attempt.model}`),
+          gatewayKey: keyShape(env),
         },
         200,
         headers,
