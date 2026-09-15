@@ -544,6 +544,8 @@
 
   const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
   const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away|fuck\s?(?:you|u|off)|shut\s?up|bitch\b|dumbass|get\s?a\s?life/i;
+  // Direct insults use the hostile reply pool so old context cannot leak in.
+  const DIRECT_INSULT = /\bfuck\s?(?:you|u)\b|\b(?:bitch|dumbass)\b/i;
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
@@ -1158,6 +1160,13 @@
   }
 
   async function writeLine(trigger, avoid, rejected) {
+    if (trigger.forceFallback) {
+      return {
+        source: "canned",
+        message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)),
+        reason: "direct insult",
+      };
+    }
     if (workerApiUrl) {
       try {
         const response = await fetch(workerApiUrl + "/api/reply", {
@@ -1483,7 +1492,8 @@
     if (HOSTILE.test(turn) && (named || nearby)) {
       return respond({
         kind: "hostile", subject: player.name, channel, conversational: true,
-        evidence: shortName(player.name) + " told me to move while standing next to me",
+        forceFallback: DIRECT_INSULT.test(turn),
+        evidence: shortName(player.name) + " directly insulted me while standing next to me",
       });
     }
 

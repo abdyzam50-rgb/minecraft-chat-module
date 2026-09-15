@@ -246,6 +246,9 @@ export class ChatAI extends EventEmitter {
    * @returns {Promise<{respond:boolean, message:string, reason:string, source:string}|null>}
    */
   async think(trigger, ts, options) {
+    if (trigger.forceFallback) {
+      return this.fallback.decide(this.store, trigger);
+    }
     if (!this.usingApi) {
       return this.config.llm.fallbackOnError || !this.responder.available
         ? this.fallback.decide(this.store, trigger)

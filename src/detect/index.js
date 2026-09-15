@@ -320,6 +320,8 @@ export function detectHostile(store, config, message, ts = Date.now()) {
     subject: message.sender,
     severity: 1,
     conversational: true,
+    // A canned hostile line cannot drift into unrelated context such as a prior macro check.
+    forceFallback: /\bfuck\s?(?:you|u)\b|\b(?:bitch|dumbass)\b/i.test(content),
     evidence: `${message.sender} said "${content}" while standing near me.`,
     channel: message.channel === 'whisper' ? 'whisper' : message.channel,
   };
