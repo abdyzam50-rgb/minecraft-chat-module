@@ -200,6 +200,12 @@ export const DEFAULTS = {
       answerNearMisses: true,
       /** How long we wait for them to confirm before dropping it. */
       confirmWindowMs: 90000,
+      /**
+       * People type in bursts and only one line carries the name. Lines from
+       * the same player inside this window are read as one turn, so a
+       * question typed a second before the name is not lost.
+       */
+      burstWindowMs: 12000,
       /** Answer whispers even when they don't include a question. */
       answerWhispers: true,
     },

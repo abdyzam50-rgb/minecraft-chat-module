@@ -217,6 +217,11 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push(
       '',
       'This one is not testing you — they are just talking to you. Answer them properly, the way you would answer someone standing next to you at the same grind. Keep the attitude for people being deliberately annoying.',
+      // The cached rule above says to leave names out, and it keeps losing to
+      // the pull of the conversation: "tired ngl, Dream, hbu?". A rule in the
+      // per-message block outweighs one in the cached preamble, so it is
+      // repeated here where it applies.
+      `Do not use their name in this reply. They know you are talking to them — you are replying to them. A name belongs on a call-out across a busy chat, not in a back-and-forth, and "${subjectShort}" dropped into the middle of a sentence is the clearest tell that something automated typed it.`,
       'If they asked something, actually answer it before anything else. A one-word deflection like "what" or "yeah?" is never the answer to a real question.',
     );
   }

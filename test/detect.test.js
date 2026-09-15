@@ -462,8 +462,8 @@ test('a greeting and a bare name call are told apart', () => {
   const bare = detectFromChat(
     store,
     config,
-    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: '3172', channel: 'all', ts: NOW + 1000 }),
-    NOW + 1000,
+    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: '3172', channel: 'all', ts: NOW + 60_000 }),
+    NOW + 60_000,
   );
   assert.ok(bare);
   assert.equal(bare.opener, true);
@@ -512,14 +512,55 @@ test('a question about you is not a question about the grind', () => {
     );
 
   for (const [i, line] of ['hows ur day 3172?', 'how are you 3172', 'hru 3172', 'you good 3172?'].entries()) {
-    const trigger = asked(line, NOW + i * 1000);
+    // Well apart: lines seconds from each other are one turn, not four.
+    const trigger = asked(line, NOW + i * 60_000);
     assert.ok(trigger, `${line} deserves an answer`);
     assert.equal(trigger.askedWellbeing, true, line);
     assert.equal(trigger.askedActivity, false, `${line} is not asking about the grind`);
   }
 
   // And the grind question still reads as one.
-  const activity = asked('what you upto 3172', NOW + 9000);
+  const activity = asked('what you upto 3172', NOW + 300_000);
   assert.equal(activity.askedActivity, true);
   assert.equal(activity.askedWellbeing, false);
+});
+
+test('a burst of messages is read as one turn', () => {
+  // Reported: "Yo how ur day?" then "3172?" a second later came back as
+  // "yo wsg". Only the second line names us and a name on its own is a
+  // call-out, so the question in the first line was never read at all.
+  const config = resolveConfig({ username: '3172' });
+  const store = new ContextStore(config, () => NOW);
+  store.updateNearby([{ name: 'xX_DreamSlayer_Xx', distance: 3.2 }], NOW);
+
+  store.addChat({ sender: 'xX_DreamSlayer_Xx', content: 'Yo how ur day?', channel: 'all', ts: NOW });
+  const trigger = detectFromChat(
+    store,
+    config,
+    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: '3172?', channel: 'all', ts: NOW + 1500 }),
+    NOW + 1500,
+  );
+
+  assert.ok(trigger);
+  assert.equal(trigger.askedWellbeing, true, 'the question came a line early, not never');
+  assert.equal(trigger.opener, false, 'that is not a bare call-out — they asked something');
+});
+
+test('an old line from the same player is not dragged into a new turn', () => {
+  const config = resolveConfig({ username: '3172' });
+  const store = new ContextStore(config, () => NOW);
+  store.updateNearby([{ name: 'xX_DreamSlayer_Xx', distance: 3.2 }], NOW);
+
+  store.addChat({ sender: 'xX_DreamSlayer_Xx', content: 'hows ur day?', channel: 'all', ts: NOW });
+  const later = NOW + 5 * 60_000;
+  const trigger = detectFromChat(
+    store,
+    config,
+    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: '3172', channel: 'all', ts: later }),
+    later,
+  );
+
+  assert.ok(trigger);
+  assert.equal(trigger.askedWellbeing, false, 'five minutes later is a new conversation');
+  assert.equal(trigger.opener, true);
 });

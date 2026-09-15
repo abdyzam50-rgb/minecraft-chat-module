@@ -550,6 +550,20 @@
   const FILLER_WORDS = ["mb","my","bad","soz","sorry","apologies","all","g","good","np","no","worries","problem","fine","cool","nice","aight","ight","alr","alright","ok","okay","kk","k","gotcha","ic","i","see","fair","enough","true","word","bet","facts","lol","lmao","lmfao","haha","hahaha","hah","xd","rip","gg","ty","thanks","thx","tysm","cheers","ez","yh","yeah","ya","yep","yup","nah","oh","ah","ahh","damn","bro","man","mate","lad","dude","bruh","gang","twin","pretty","quite","very","real","great","decent","grand","same","not","bad","meh","tired","chillin","chilling","vibing","nm","nmu","im","am","doing","been","feeling","still"];
 
   /** A message made only of filler is an acknowledgement, not a question. */
+  /**
+   * The player's whole turn: anything they typed in the last few seconds that
+   * we have not answered yet, plus this line.
+   */
+  function burstText(name, text, ts) {
+    const answeredAt = lastSaid() ? lastSaid().ts : 0;
+    const earlier = state.heard
+      .filter(function (line) {
+        return line.sender === name && line.ts >= ts - 12000 && line.ts > answeredAt && line.content && line.content !== text;
+      })
+      .map(function (line) { return line.content; });
+    return earlier.length ? earlier.concat(text).join(" ") : text;
+  }
+
   /** The last thing we said, or null. */
   function lastSaid() {
     return state.sent.length ? state.sent[state.sent.length - 1] : null;
@@ -802,6 +816,7 @@
     convo: {},         // name -> {lastTurn, turns}
     pathfinder: { state: "running", blockedBy: null },
     sent: [],          // {ts, message, subject, kind}
+    heard: [],         // {ts, sender, content} — incoming lines, for burst reading
     rotation: {},
     log: [],
   };
@@ -1115,7 +1130,7 @@
         ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
         : "",
       (trigger.kind === "mention" || trigger.kind === "whisper")
-        ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question.'
+        ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question. Do not use their name in this reply: they know you are talking to them, and a name dropped into the middle of a sentence is the clearest tell that something automated typed it. Names are for calling someone out across a busy chat, not for a back-and-forth.'
         : "",
       trigger.subject ? ("Reply to " + trigger.subject + '. Call them "' + shortName(trigger.subject) + '".') : "",
       "",
@@ -1366,6 +1381,8 @@
   async function incoming(player, text, channel) {
     sayAs(player, text, channel);
     const ts = Date.now();
+    state.heard.push({ ts: ts, sender: player.name, content: text });
+    if (state.heard.length > 40) state.heard.shift();
     const nearby = player.distance <= DETECT.chatRadius;
     const nearForClaim = player.distance <= DETECT.spotClaimRadius;
     const named = mentions(text, SELF);
@@ -1460,25 +1477,29 @@
     if (named || continuing || greetingUpClose) {
       // Strip our name and see whether anything was actually said. "yo 3172"
       // wants "?" back, not a sentence about ghost drops.
-      const remainder = stripName(text);
+      // People type in bursts: "Yo how ur day?" then "3172?" a second later.
+      // Only the second names us, and read alone it is a bare call-out, so the
+      // question in the first line goes unanswered. Both lines are one turn.
+      const turn = burstText(player.name, text, ts);
+      const remainder = stripName(turn);
       const opener = isGreetingOnly(remainder);
       // "3172" alone and "yo" are both openers and want opposite replies: a
       // bare name call wants "?", a greeting wants a greeting back.
       const greeting = opener && remainder.length > 0;
       const smalltalk = !opener && isSmallTalk(remainder);
-      const compliment = !opener && !smalltalk && isCompliment(text, named);
+      const compliment = !opener && !smalltalk && isCompliment(turn, named);
       return respond({
         kind: "mention", subject: player.name, channel, conversational: true,
         opener: opener, greeting: greeting, smalltalk: smalltalk, compliment: compliment,
-        askedActivity: ACTIVITY_QUESTION.test(text) && !WELLBEING_QUESTION.test(text),
-        askedWellbeing: WELLBEING_QUESTION.test(text),
+        askedActivity: ACTIVITY_QUESTION.test(turn) && !WELLBEING_QUESTION.test(turn),
+        askedWellbeing: WELLBEING_QUESTION.test(turn),
         answeredUs:
           Boolean(lastSaid()) &&
           ts - lastSaid().ts <= 120000 &&
           WE_ASKED.test(lastSaid().message) &&
-          isPlainAnswer(text) &&
-          !ACTIVITY_QUESTION.test(text) &&
-          !WELLBEING_QUESTION.test(text),
+          isPlainAnswer(turn) &&
+          !ACTIVITY_QUESTION.test(turn) &&
+          !WELLBEING_QUESTION.test(turn),
         evidence: opener
           ? shortName(player.name) + " just called my name, nothing else in it"
           : smalltalk
@@ -1697,7 +1718,7 @@
   el("resetBtn").addEventListener("click", () => {
     state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {};
     state.log = []; state.fuses = {}; state.anger = {}; state.convo = {}; state.checks = {};
-    state.askedWho = {};
+    state.askedWho = {}; state.heard = [];
     state.pathfinder = { state: "running", blockedBy: null };
     chatLog.innerHTML = "";
     boot();

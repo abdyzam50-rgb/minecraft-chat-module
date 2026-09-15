@@ -360,10 +360,19 @@ export function detectMention(store, config, message, ts = Date.now()) {
     return null;
   }
 
+  // People type in bursts: "Yo how ur day?" then "3172?" a second later. Only
+  // the second one names us, and read alone it is a bare call-out — so the
+  // question in the first line goes unanswered and the reply is "yo wsg" to
+  // someone who asked how your day was. Both lines are one turn.
+  const burst = recentBurst(store, message, config, ts);
+  const content = burst.length
+    ? burst.concat(message.content).join(' ')
+    : message.content;
+
   // Strip our name out and see whether anything was actually said.
   const remainder = [config.username, shortName(config.username), ...config.aliases]
     .filter(Boolean)
-    .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), message.content)
+    .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), content)
     .replace(/\s+/g, ' ')
     .trim();
   const opener = isGreetingOnly(remainder);
@@ -372,11 +381,11 @@ export function detectMention(store, config, message, ts = Date.now()) {
   const greeting = opener && remainder.length > 0;
   // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
   const smalltalk = !opener && isSmallTalk(remainder);
-  const compliment = !opener && !smalltalk && isCompliment(message.content, named);
-  const askedActivity = ACTIVITY_QUESTION.test(message.content);
+  const compliment = !opener && !smalltalk && isCompliment(content, named);
+  const askedActivity = ACTIVITY_QUESTION.test(content);
   // "hows ur day" is not "wyd". Asked together, the personal one wins: they
   // asked after you, and the grind is not an answer to that.
-  const askedWellbeing = WELLBEING_QUESTION.test(message.content);
+  const askedWellbeing = WELLBEING_QUESTION.test(content);
 
   // We asked them something, they answered, and asked nothing back. That is
   // the end of the exchange, not a cue to start a new subject: "hbu" /
@@ -385,7 +394,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
     Boolean(store.lastOutgoing) &&
     ts - store.lastOutgoing.ts <= config.limits.conversation.windowMs &&
     WE_ASKED.test(store.lastOutgoing.message) &&
-    isPlainAnswer(message.content) &&
+    isPlainAnswer(content) &&
     !askedActivity &&
     !askedWellbeing;
 
@@ -449,4 +458,31 @@ export function detectFromChat(store, config, message, ts = Date.now()) {
     detectMention(store, config, message, ts) ??
     null
   );
+}
+
+/**
+ * Lines the same player typed moments ago that nobody has answered yet.
+ *
+ * Reported: "Yo how ur day?" then "3172?" a second later got "yo wsg" — the
+ * question in the first line was never read, because only the second one
+ * named us and a name on its own is a call-out. A burst like that is one
+ * turn, so it is read as one.
+ */
+function recentBurst(store, message, config, ts) {
+  const windowMs = config.detect.mention.burstWindowMs;
+  const since = ts - windowMs;
+  const answeredAt = store.lastOutgoing ? store.lastOutgoing.ts : 0;
+
+  return store
+    .recentChat(12)
+    .filter(
+      (line) =>
+        line !== message &&
+        line.sender === message.sender &&
+        line.ts >= since &&
+        // Anything we already replied to is said and done.
+        line.ts > answeredAt &&
+        line.content,
+    )
+    .map((line) => line.content);
 }
