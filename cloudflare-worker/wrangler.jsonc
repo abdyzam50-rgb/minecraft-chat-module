@@ -7,5 +7,13 @@
   // API share one origin. Requests that do not match a file fall through to
   // src/index.js, which is what serves /api/reply and /health.
   "assets": { "directory": "./public" },
-  "vars": { "GEMINI_MODEL": "gemini-3.6-flash" }
+  // Switching the test site to a free gateway is these three lines plus an
+  // OPENAI_API_KEY repo secret: set LLM_PROVIDER to "openai" and redeploy.
+  // With no LLM_PROVIDER the Worker uses Gemini when GEMINI_API_KEY is set.
+  "vars": {
+    "GEMINI_MODEL": "gemini-3.6-flash",
+    "LLM_PROVIDER": "gemini",
+    "OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
+    "OPENAI_MODEL": "z-ai/glm-5.3-free"
+  }
 }

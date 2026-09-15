@@ -166,19 +166,36 @@ It is the identical HTML the Artifact runs. The only difference is `config.js`:
 
 | `window.MCCHAT_API_URL` | Where replies come from |
 |---|---|
-| `location.origin` (what the deploy writes) | Gemini, via this Worker |
+| `location.origin` (what the deploy writes) | whichever model the Worker is pointed at |
 | empty, inside an Artifact | the viewer's own Claude, via `claude.use("sample")` |
 | empty, anywhere else | the canned offline lines |
 
-The page never holds a Gemini key. It posts its prompt to `/api/reply`; the
-Worker adds the key server-side.
+The page never holds a key. It posts its prompt to `/api/reply`; the Worker adds
+the key server-side.
 
-`.github/workflows/deploy-test-site.yml` deploys both on a push. It needs three
-repository secrets — `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GEMINI_API_KEY` —
-and checks for all three up front so a missing one names itself. After
-deploying it polls the live site until `/health` reports its key and
-`/chat-sandbox.html` returns 200, so a green run means the site actually works
-rather than that wrangler exited zero.
+The Worker speaks both upstreams the module does — Gemini, and any OpenAI-shaped
+`/chat/completions` gateway. Switching the test site to a free model is a
+`cloudflare-worker/wrangler.jsonc` edit plus an `OPENAI_API_KEY` repo secret:
+
+```jsonc
+"LLM_PROVIDER": "openai",
+"OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
+"OPENAI_MODEL": "z-ai/glm-5.3-free"
+```
+
+With no `LLM_PROVIDER` it uses whichever key is configured, preferring Gemini, so
+an existing deploy is unaffected. `/health` reports the provider and model it
+resolved, and the page puts the model name in its status line — when you are
+comparing how two models write "yh?", you want to know which one you are looking
+at without reading the deploy log.
+
+`.github/workflows/deploy-test-site.yml` deploys both on a push. It needs
+`CF_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, plus at least one of `GEMINI_API_KEY`
+and `OPENAI_API_KEY`, and checks up front so a missing one names itself. Setting
+both keys is fine, and makes changing provider an edit rather than a secrets
+change. After deploying it polls the live site until `/health` reports its key
+and `/chat-sandbox.html` returns 200, so a green run means the site actually
+works rather than that wrangler exited zero.
 
 `web/` is copied to `cloudflare-worker/public/` at deploy time and served by
 Wrangler's static assets. Anything that is not a file there falls through to

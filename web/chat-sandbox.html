@@ -941,6 +941,8 @@
   let liveReady = false;
   // Cleared if the Worker cannot be reached, so writeLine stops trying it.
   let workerApiUrl = String(window.MCCHAT_API_URL || "").replace(/\/$/, "");
+  /** What the Worker says it is talking to, filled in by the health check. */
+  let upstreamName = "the model";
 
   function setLive(on, label) {
     liveReady = on;
@@ -956,16 +958,19 @@
         if (!health.ok) throw new Error("health check returned " + health.status);
         const status = await health.json().catch(function () { return {}; });
         if (status.keyConfigured === false) {
-          throw new Error("the Worker has no GEMINI_API_KEY set");
+          throw new Error("the Worker has no API key set for " + (status.provider || "its provider"));
         }
-        setLive(true, "live · Gemini via Worker");
+        // Name the actual model, not the provider: the whole point of the page
+        // is comparing how different ones write a two-word reply.
+        upstreamName = status.model || status.provider || "the Worker";
+        setLive(true, "live · " + upstreamName);
         return;
       } catch (error) {
         // Forget the URL, otherwise every reply keeps calling a Worker we
         // already know is down while the label claims we fell back.
         workerApiUrl = "";
         setLive(false, "offline · lines repeat");
-        logEntry("skip", "Gemini Worker unreachable (" + error.message + ") — using canned lines");
+        logEntry("skip", "Worker unreachable (" + error.message + ") — using canned lines");
         return;
       }
     }
@@ -1091,11 +1096,11 @@
         // and a burst of testing will hit it. Only a fault that will not fix
         // itself (bad key, retired model, no key configured) turns live off.
         if (isTransient(error.message)) {
-          logEntry("limit", "Gemini busy (" + shortenError(error.message) + ") — skipping this one");
+          logEntry("limit", upstreamName + " busy (" + shortenError(error.message) + ") — skipping this one");
           setLive(true, "live · rate limited, retrying");
           return { source: "gemini", message: null, reason: "rate limited" };
         }
-        logEntry("skip", "Gemini failed (" + shortenError(error.message) + ") — canned lines from here");
+        logEntry("skip", upstreamName + " failed (" + shortenError(error.message) + ") — canned lines from here");
         workerApiUrl = "";
         setLive(false, "offline · lines repeat");
         return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
@@ -1132,7 +1137,7 @@
       .test(String(message || ""));
   }
 
-  /** Gemini's quota errors run to several lines; the first is the useful one. */
+  /** Quota errors run to several lines; the first is the useful one. */
   function shortenError(message) {
     return String(message || "").split("\n")[0].slice(0, 90);
   }
