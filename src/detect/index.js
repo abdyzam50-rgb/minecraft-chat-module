@@ -362,6 +362,9 @@ export function detectMention(store, config, message, ts = Date.now()) {
       !(isWhisper && config.detect.mention.answerWhispers)) {
     return null;
   }
+  // Check the newest line before merging a fast multi-line turn. Otherwise a
+  // keyboard smash can borrow meaning from a previous, normal line.
+  if (isLikelyGibberish(message.content)) return null;
 
   // People type in bursts: "Yo how ur day?" then "3172?" a second later. Only
   // the second one names us, and read alone it is a bare call-out — so the

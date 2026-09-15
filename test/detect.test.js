@@ -286,6 +286,13 @@ test('does not call the model for an obvious keyboard smash', () => {
   assert.equal(detectFromChat(store, config, chat('Dream', '3172 asdfghjkl'), NOW), null);
   assert.equal(detectFromChat(store, config, chat('Dream', '3172 qwertyuiop'), NOW), null);
 });
+
+test('does not merge a keyboard smash into an earlier normal conversation line', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  store.openConversation('Dream', NOW - 1000);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'Doskdnfj'), NOW), null);
+});
 test('a greeting with a question attached is not just a greeting', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);

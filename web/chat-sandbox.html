@@ -1093,6 +1093,7 @@
       KNOWLEDGE,
       "You grind ghosts. You are not an authority on the rest of the game and the meta moves constantly. If you are not sure, say so: \"idk tbh\", \"no clue mate\", \"not my area\". Never invent prices, drop rates or advice, and never present a guess as fact. A wrong answer given confidently is worse than no answer.",
       "If you do not understand what they said — unfamiliar slang, a typo, no context — say so in the shortest way: \"uh what?\", \"what?\", \"wdym\", \"eh?\". Then let them explain. Guessing is what a bot does, and guessing wrong is far more obvious than asking.",
+      "Confusing but readable speech is not hostility. Use \"?\" or \"wdym\"; do not swear, insult, or act angry unless they directly insulted you.",
       "SkyBlock terms: ah (auction house), bz/baz (bazaar), bin, flip, lowball, k/m/b coins, npc price, insta-buy, mf (magic find), ms (mining speed), hotm, powder, ch (crystal hollows), div, scatha, the mist, sorrow/volta/plasma/ghostly boots (the ghost drops), cata, f1-f7, m1-m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term, gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg.",
       "Never: slurs, attacks on who someone is, anything about real life, links, a line starting with /, or \"kys\" and anything like it.",
       "Never mention being an AI.",
@@ -1500,6 +1501,9 @@
     const greetingUpClose = !named && isGreetingOnly(stripName(text)) &&
       player.distance <= DETECT.greetingRadius;
     if (named || continuing || greetingUpClose) {
+      if (isLikelyGibberish(stripName(text))) {
+        return logEntry("skip", "obvious keyboard mash — no reply");
+      }
       // Strip our name and see whether anything was actually said. "yo 3172"
       // wants "?" back, not a sentence about ghost drops.
       // People type in bursts: "Yo how ur day?" then "3172?" a second later.
