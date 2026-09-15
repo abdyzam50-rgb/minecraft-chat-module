@@ -325,7 +325,11 @@ export class ChatAI extends EventEmitter {
     }
 
     this.policy.record(trigger, clean.message);
-    this.store.recordOutgoing(clean.message);
+    this.store.recordOutgoing(clean.message, this.now(), {
+      subject: trigger.subject,
+      kind: trigger.kind,
+      forced: trigger.forceFallback,
+    });
     if (trigger.anger && trigger.subject) this.store.noteAnger(trigger.subject, trigger.anger);
     // Remember we asked, so their "no" is understood as an answer to it.
     if (trigger.uncertain && trigger.subject) this.store.noteAskedWho(trigger.subject);

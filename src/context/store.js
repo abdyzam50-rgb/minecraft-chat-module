@@ -44,6 +44,8 @@ export class ContextStore {
 
     /** Last thing we said, so we can tell whether a reply is aimed at us. */
     this.lastOutgoing = null;
+    /** subject -> {ts, kind, forced} for the last thing we said to them. */
+    this.lastReplyTo = new Map();
     /** Mood, not a decision: {score, ts} decayed on read. See noteAnnoyance. */
     this.annoyance = { score: 0, ts: 0 };
     this.startedAt = this.now();
@@ -242,8 +244,23 @@ export class ContextStore {
     if (p) p.askedWhoTs = null;
   }
 
-  recordOutgoing(message, ts = this.now()) {
+  recordOutgoing(message, ts = this.now(), meta = {}) {
     this.lastOutgoing = { ts, message };
+    if (meta.subject) {
+      this.lastReplyTo.set(meta.subject, { ts, kind: meta.kind, forced: Boolean(meta.forced) });
+    }
+  }
+
+  /**
+   * Did we just tell this player where to go?
+   *
+   * Someone who swears at you and then opens with "yo" a few seconds later is
+   * not greeting you, and answering "yo" back is the bot forgetting what just
+   * happened.
+   */
+  recentDirectHostility(name, windowMs, ts = this.now()) {
+    const last = this.lastReplyTo.get(name);
+    return Boolean(last && last.kind === 'hostile' && last.forced && ts - last.ts <= windowMs);
   }
 
   /** Blocks by `name` inside the last `windowMs`. */

@@ -1364,3 +1364,71 @@ test('a name is for a call-out, not for every reply', async () => {
   }
   assert.ok(!/Do not use their name/i.test(prompts.at(-1)), 'a call-out needs the name');
 });
+
+test('a direct insult skips the model and uses a canned line', async () => {
+  // The route is in the page and in the module: detection happens before the
+  // request goes anywhere, so it is reliable rather than hoping the model
+  // remembers the persona.
+  let calls = 0;
+  const client = {
+    messages: {
+      async create() {
+        calls += 1;
+        return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ respond: true, message: 'model line', reason: '' }) }] };
+      },
+    },
+  };
+  const ai = createChatAI({ username: '3172', persona: 'unfiltered', chat: { profanity: 'allow' }, client });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: fuck u 3172' });
+
+  assert.equal(calls, 0, 'the model is never asked');
+  assert.equal(said.at(-1).trigger, 'hostile');
+  assert.ok(said.at(-1).message.length > 0);
+});
+
+test('"yo" right after being told to get lost is not a greeting', async () => {
+  // Ported from the sandbox, which had this while the module only carried the
+  // replies for it — so the page did the right thing and the bot that
+  // actually plays did not.
+  const client = {
+    messages: {
+      async create() {
+        return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ respond: true, message: 'model line', reason: '' }) }] };
+      },
+    },
+  };
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', persona: 'unfiltered', chat: { profanity: 'allow' }, now: () => clock, client });
+  const said = [];
+  ai.on('say', (a) => said.push(a));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: fuck u 3172' });
+
+  clock += 8_000;
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: yo' });
+  assert.equal(said.at(-1).trigger, 'hostile_followup', 'they are restarting it, not saying hello');
+
+  // Once the window has passed, a greeting is a greeting again — the bot is
+  // not meant to hold a grudge for the rest of the session.
+  clock += 120_000;
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: yo' });
+  assert.equal(said.at(-1).trigger, 'mention');
+});
+
+test('a canned hostile line still respects the profanity setting', async () => {
+  const client = { messages: { async create() { throw new Error('the model should not be called'); } } };
+  const lines = {};
+  for (const profanity of ['clean', 'allow']) {
+    const ai = createChatAI({ username: '3172', persona: 'unfiltered', chat: { profanity }, client });
+    ai.on('say', (a) => { lines[profanity] = a.message; });
+    await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+    await ai.handle({ type: 'chat', raw: '[VIP] Rude: fuck u 3172' });
+  }
+  assert.doesNotMatch(lines.clean, /fuck/, 'a clean run never swears, whatever the persona says');
+  assert.ok(lines.allow.length > 0);
+});

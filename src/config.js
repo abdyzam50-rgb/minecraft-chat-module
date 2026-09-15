@@ -226,6 +226,11 @@ export const DEFAULTS = {
       /** How long we wait for them to confirm before dropping it. */
       confirmWindowMs: 90000,
       /**
+       * How long after telling someone to get lost their "yo" still reads as
+       * restarting the argument rather than as a greeting.
+       */
+      hostileFollowupMs: 60000,
+      /**
        * People type in bursts and only one line carries the name. Lines from
        * the same player inside this window are read as one turn, so a
        * question typed a second before the name is not lost.

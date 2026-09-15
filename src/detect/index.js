@@ -354,6 +354,27 @@ export function detectMention(store, config, message, ts = Date.now()) {
     store.inConversation(message.sender, config.limits.conversation.windowMs, ts) &&
     (awaitingReply || store.isNearby(message.sender, config.detect.chatRadius, ts));
 
+  // Someone who swore at you and opens with "yo" ten seconds later is not
+  // greeting you, they are restarting it. Ported from the sandbox, which had
+  // this while the module only had the replies for it — so the page did the
+  // right thing and the bot that actually plays did not.
+  if (
+    config.persona === 'unfiltered' &&
+    isGreetingOnly(message.content) &&
+    store.recentDirectHostility(message.sender, config.detect.mention.hostileFollowupMs, ts) &&
+    (named || store.isNearby(message.sender, config.detect.chatRadius, ts))
+  ) {
+    return {
+      kind: 'hostile_followup',
+      subject: message.sender,
+      severity: 1,
+      conversational: true,
+      forceFallback: true,
+      evidence: `${message.sender} tried to restart chat right after directly insulting me.`,
+      channel: message.channel === 'whisper' ? 'whisper' : message.channel,
+    };
+  }
+
   // Someone at arm's length saying nothing but hello is talking to us, name or
   // not — and this is what keeps a thread alive when a reply got dropped and
   // no conversation was ever opened.
