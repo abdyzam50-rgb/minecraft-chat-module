@@ -996,7 +996,16 @@
         }
         return { source: "gemini", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)), reason: reply.reason };
       } catch (error) {
-        logEntry("skip", "Gemini Worker failed (" + error.message + ") — using canned lines from here");
+        // A rate limit or a blip is not a reason to give up on live replies for
+        // the rest of the session — the free tier allows 20 requests a minute
+        // and a burst of testing will hit it. Only a fault that will not fix
+        // itself (bad key, retired model, no key configured) turns live off.
+        if (isTransient(error.message)) {
+          logEntry("limit", "Gemini busy (" + shortenError(error.message) + ") — skipping this one");
+          setLive(true, "live · rate limited, retrying");
+          return { source: "gemini", message: null, reason: "rate limited" };
+        }
+        logEntry("skip", "Gemini failed (" + shortenError(error.message) + ") — canned lines from here");
         workerApiUrl = "";
         setLive(false, "offline · lines repeat");
         return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
@@ -1025,6 +1034,17 @@
       }
       return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
     }
+  }
+
+  /** Will this fix itself if we just try again in a moment? */
+  function isTransient(message) {
+    return /\b(429|500|502|503|504)\b|quota|rate.?limit|overload|unavailable|timeout|failed to fetch|networkerror/i
+      .test(String(message || ""));
+  }
+
+  /** Gemini's quota errors run to several lines; the first is the useful one. */
+  function shortenError(message) {
+    return String(message || "").split("\n")[0].slice(0, 90);
   }
 
   function shoutFor(trigger) {
