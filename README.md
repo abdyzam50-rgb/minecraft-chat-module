@@ -82,7 +82,10 @@ faster than training data, and a confident wrong answer is worse than none.
 Two things fix it, and they work on either provider:
 
 **`knowledge/skyblock.md`** is injected verbatim into the cached prompt and told
-to override anything the model thinks it remembers. It ships with real
+to override anything the model thinks it remembers. The module reads it at
+request time; the hosted page can't, so `node web/build-sandbox.mjs` bakes it
+into `web/chat-sandbox.html` from the same file. A test and the deploy both run
+`--check`, so a stale page fails rather than shipping with out-of-date facts. It ships with real
 early-game methods (forge/refined mithril, NPC flipping, experimentation table,
 the Rift, zealots), an explicit "NOT early game" list, and the ghost drops.
 Edit it as the game changes — that's the point of it being a file. Point at it

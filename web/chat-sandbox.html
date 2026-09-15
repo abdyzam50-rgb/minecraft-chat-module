@@ -898,6 +898,10 @@
     }
   })();
 
+  // >>> generated from knowledge/skyblock.md — run web/build-sandbox.mjs
+  const KNOWLEDGE = "# What 3172 knows about SkyBlock\n\n## Money, by progression stage\n\nEarly game (no gear, under ~10m):\n- The Forge — refined mithril on a 6h cycle, roughly 3-4m/day for very little effort\n- NPC flipping — buy enchanted diamond blocks on bazaar order, sell to NPC\n- Experimentation table, once enchanting is up\n- The Rift — cheap to max and there are several income routes inside it\n- Zealots in the End — summoning eyes to bazaar; wants zealuck and an enderman pet\n\nNOT early game, do not suggest these to a new player:\n- f7 / master mode dungeons — endgame, needs a full setup and a party\n- Slayer t4/t5 — needs real gear first\n- Ghost grinding (what 3172 does) — needs magic find, a decent setup and patience\n\nMid game: dungeons from f5 up, slayer t3-t4, gemstone mining, forge flipping.\n\nLate game: f7/m7 carries, ghosts, high-tier slayers, large-scale AH flipping.\n\n## This grind\n\n- Ghosts live in The Mist, in the Dwarven Mines. Lv250, they walk at you and hit\n  for ~1000 plus true damage per second inside 4 blocks.\n- Drops: Sorrow, Volta, Plasma, Ghostly Boots. Sorrow is the rare one (~0.12%),\n  affected by magic find and looting.\n- Magic find and bestiary matter more than raw damage.\n- It is the most macro-accused grind in the game, which is why the checks happen.\n\n## Things 3172 does not know\n\n3172 grinds ghosts. They are not an expert on farming, fishing, or the current\ndungeon meta, and they have not played early game in a long time. Saying\n\"idk tbh\" about those is honest and normal — see `knowledge.admitIgnorance`.";
+  // <<< generated
+
   /** Everything the model needs to write one line, in one prompt. */
   function buildPrompt(trigger, avoid, rejected) {
     const persona = { chill: "calm and friendly, never insults, never swears",
@@ -928,6 +932,9 @@
       state.pathfinder.blockedBy
         ? "Right now " + shortName(state.pathfinder.blockedBy) + " is stood in your way."
         : "Nobody is in your way right now — asking someone to move would make no sense.",
+      KNOWLEDGE ? "What you know about the game. This is current and it overrides anything you think you remember:" : "",
+      KNOWLEDGE,
+      "You grind ghosts. You are not an authority on the rest of the game and the meta moves constantly. If you are not sure, say so: \"idk tbh\", \"no clue mate\", \"not my area\". Never invent prices, drop rates or advice, and never present a guess as fact. A wrong answer given confidently is worse than no answer.",
       "If you do not understand what they said — unfamiliar slang, a typo, no context — say so in the shortest way: \"uh what?\", \"what?\", \"wdym\", \"eh?\". Then let them explain. Guessing is what a bot does, and guessing wrong is far more obvious than asking.",
       "SkyBlock terms: ah (auction house), bz/baz (bazaar), bin, flip, lowball, k/m/b coins, npc price, insta-buy, mf (magic find), ms (mining speed), hotm, powder, ch (crystal hollows), div, scatha, the mist, sorrow/volta/plasma/ghostly boots (the ghost drops), cata, f1-f7, m1-m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term, gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg.",
       "Never: slurs, attacks on who someone is, anything about real life, links, a line starting with /, or \"kys\" and anything like it.",

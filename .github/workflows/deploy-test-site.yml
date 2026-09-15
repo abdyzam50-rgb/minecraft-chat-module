@@ -33,6 +33,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check the page is in sync with the knowledge file
+        run: node web/build-sandbox.mjs --check
+
       - name: Stage the site for the Worker to serve
         run: |
           rm -rf cloudflare-worker/public

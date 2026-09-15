@@ -13,7 +13,8 @@
   "scripts": {
     "start": "node bin/mcchat.js",
     "test": "node --test test/*.test.js",
-    "check": "node bin/mcchat.js --check"
+    "check": "node bin/mcchat.js --check",
+    "build:sandbox": "node web/build-sandbox.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0"

@@ -50,3 +50,30 @@ test('the page itself is carried over whole', () => {
   // config.js must still load before the inline script that reads it.
   assert.ok(html.indexOf('src="config.js"') < html.indexOf('window.claude'));
 });
+
+test('the page carries the same game knowledge the module does', async () => {
+  // The module reads knowledge/skyblock.md at request time; the page cannot,
+  // so it is baked in. This fails the moment the two drift.
+  const { render } = await import('../web/build-sandbox.mjs');
+  const markdown = fs.readFileSync('knowledge/skyblock.md', 'utf8');
+  assert.equal(
+    render(source, markdown),
+    source,
+    'web/chat-sandbox.html is stale — run: node web/build-sandbox.mjs',
+  );
+});
+
+test('the baked knowledge holds the facts the bot got wrong', () => {
+  const knowledge = JSON.parse(source.match(/const KNOWLEDGE = ("(?:[^"\\]|\\.)*");/)[1]);
+  assert.match(knowledge, /The Forge/);
+  assert.match(knowledge, /NPC flipping/);
+  assert.match(knowledge, /Zealots/);
+  assert.match(knowledge, /NOT early game/);
+  assert.match(knowledge, /f7 \/ master mode dungeons — endgame/);
+});
+
+test('the page may admit it does not know', () => {
+  assert.match(source, /idk tbh/);
+  assert.match(source, /Never invent prices, drop rates or advice/);
+  assert.match(source, /worse than no answer/);
+});
