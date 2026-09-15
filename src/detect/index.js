@@ -448,10 +448,12 @@ export function detectMuted(message) {
  */
 export function detectFromChat(store, config, message, ts = Date.now()) {
   const normalized = { ...message, content: normalizeChatText(message.content) };
+  const macroCheck = detectMacroCheckTalk(store, config, normalized, ts);
+  if (macroCheck) return macroCheck;
+  if (store.isPestering(normalized.sender, config.detect.macroCheck.windowMs, ts)) return null;
   return (
     // A denial answers a question we asked, so it comes before everything.
     detectStandDown(store, config, normalized, ts) ??
-    detectMacroCheckTalk(store, config, normalized, ts) ??
     detectAccusation(store, config, normalized, ts) ??
     detectSpotClaim(store, config, normalized, ts) ??
     detectHostile(store, config, normalized, ts) ??

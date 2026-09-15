@@ -102,6 +102,10 @@ export function sanitize(raw, config, options = {}) {
       const clause = cut.replace(/[,;:—-]\s*\S*$/, '').trim();
       text = clause && /[,;:—-]/.test(cut) ? clause : cut;
     }
+    // Do not leave a cut-off fragment such as "get a" or "go fuck" in chat.
+    if (options.maxWords <= 2) {
+      text = text.replace(/^get a$/i, 'get lost').replace(/^go fuck$/i, 'fuck off');
+    }
   }
 
   // Tidy up whatever the trimming left behind — but never into nothing. "?" is

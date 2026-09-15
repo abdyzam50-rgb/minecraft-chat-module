@@ -95,16 +95,16 @@ export const PERSONAS = {
     fallback: {
       macro_check: {
         1: [
-          '{short} im real, get out my path',
-          '{short} macro checks over, fuck off',
+          'im real',
+          'fuck off',
         ],
         2: [
-          '{short} move dumbass, told u twice',
-          '{short} fuck off already',
+          'move dumbass',
+          'fuck off',
         ],
         3: [
-          '{short} get a life and fuck off',
-          '{short} stop being a bitch',
+          'get lost',
+          'fuck off',
         ],
       },
       accusation: [

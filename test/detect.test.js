@@ -130,6 +130,13 @@ test('macro-check talk from across the lobby is ignored', () => {
   assert.equal(trigger, null);
 });
 
+test('a player who keeps macro checking is ignored for the rest of the window', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Checker', distance: 3 }], NOW);
+  for (let i = 0; i < 3; i += 1) store.recordCheck('Checker', NOW - i * 1000);
+  assert.equal(detectFromChat(store, config, chat('Checker', 'yo wsg 3172'), NOW), null);
+});
+
 test('a fair claim on the spot is its own thing, not hostility', () => {
   const { config, store } = setup();
   store.updateNearby([{ name: 'Miner', distance: 3 }], NOW);

@@ -482,9 +482,9 @@
     unfiltered: {
       shouts: true,
       macro_check: {
-        1: ["{short} im real, get out my path", "{short} macro checks over, fuck off"],
-        2: ["{short} move dumbass, told u twice", "{short} fuck off already"],
-        3: ["{short} get a life and fuck off", "{short} stop being a bitch"],
+        1: ["im real", "fuck off"],
+        2: ["move dumbass", "fuck off"],
+        3: ["get lost", "fuck off"],
       },
       accusation: [
         "fuck you, im not cheating",
@@ -785,6 +785,9 @@
         // Falling back to the last complete clause gives "hey".
         const clause = cut.replace(/[,;:—-]\s*\S*$/, "").trim();
         text = clause && /[,;:—-]/.test(cut) ? clause : cut;
+      }
+      if (terse.maxWords <= 2) {
+        text = text.replace(/^get a$/i, "get lost").replace(/^go fuck$/i, "fuck off");
       }
       // Never tidy into nothing: "?" is a complete reply to a bare call-out.
       const tidied = text.replace(/^[\s,;:.!?-]+/, "").replace(/[\s,;:-]+$/, "").trim();
@@ -1427,6 +1430,11 @@
           (anger === 2 ? " I already answered once and they asked again." : "") +
           (anger === 3 ? " They have kept asking after two answers. They are winding me up now." : ""),
       });
+    }
+
+    if ((state.checks[player.name] || []).filter((t) => ts - t <= CHECK.windowMs).length >= 3 ||
+        (state.accusations[player.name] || 0) >= 3) {
+      return logEntry("skip", shortName(player.name) + " has already been answered enough — ignoring further pestering");
     }
 
     if (ACCUSATION.test(text)) {
