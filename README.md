@@ -256,6 +256,25 @@ limit for an unpredictable one. What they're actually good for is the thing a
 single vendor can't give you: a second provider to fail over to, and a way to
 try a model on a sentence like "wsg" before paying for it.
 
+**One provider is never a plan.** The Worker tries a chain — Gemini, then each
+model on the gateway key — and whichever answers, answers. That is not
+belt-and-braces: measured over six spaced requests, Gemini was out of quota for
+most of them and the free gateway pools returned `503 No available channel` and
+`ResourceExhausted: Worker local total request limit` at different moments. No
+single rung was up for the whole run; together they answered four times out of
+six, and a second pass over the chain took that up from about half.
+
+So the honest number for a free hosted setup is roughly two replies in three,
+and the failures are contention rather than anything configured wrong. Enough to
+polish a persona against; not what you would want mid-grind. A model with paid
+capacity behind it removes the contention, and `/models` on the Worker lists
+what a gateway key can actually reach, which is worth checking before trusting
+an id from a screenshot.
+
+Published as an Artifact the same page runs on the viewer's own Claude through
+`claude.use("sample")` — no key, no gateway, nothing to be rate limited, which
+makes it the better place to iterate on wording.
+
 The Worker URL is public by design, so keep this for testing unless you put
 Cloudflare Access in front of it.
 
