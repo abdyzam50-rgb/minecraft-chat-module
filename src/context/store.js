@@ -177,6 +177,21 @@ export class ContextStore {
     if (p.accusations.length > INCIDENT_HISTORY) p.accusations.shift();
   }
 
+  /**
+   * A player who keeps badgering us gets no more attention.
+   *
+   * Three is deliberately low: past that they are not asking anything, they
+   * are poking. The anger ladder still completes first, because it runs on
+   * blocks rather than on typed checks.
+   */
+  isPestering(name, windowMs = 300000, ts = this.now()) {
+    const p = this.players.get(name);
+    if (!p) return false;
+    const checks = p.checks.filter((t) => ts - t <= windowMs).length;
+    const accusations = p.accusations.filter((t) => ts - t <= windowMs).length;
+    return checks >= 3 || accusations >= 3;
+  }
+
   addIncident(kind, subject, detail, ts = this.now()) {
     this.incidents.push({ ts, kind, subject, detail });
     if (this.incidents.length > INCIDENT_HISTORY) this.incidents.shift();

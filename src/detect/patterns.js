@@ -132,7 +132,10 @@ export function accusationTarget(text, isNamed) {
 
 /** Someone telling us to move / complaining about our pathing. */
 export const HOSTILE_NUDGE = new RegExp(
-  ['get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away'].join('|'),
+  [
+    'get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away',
+    'fuck\\s?(?:you|u|off)', 'shut\\s?up', 'bitch\\b', 'dumbass', 'get\\s?a\\s?life',
+  ].join('|'),
   'i',
 );
 
@@ -143,6 +146,28 @@ export const HOSTILE_NUDGE = new RegExp(
 const GREETING_WORD =
   /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
 
+/**
+ * Canonical form used for intent matching only. The original chat line stays
+ * in history and evidence; this merely lets the detector recognise ordinary
+ * compressed spelling and one-or-two-character slips.
+ */
+export function normalizeChatText(text) {
+  return String(text ?? '')
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/\b(?:whatcha+|watcha+|wacha+|whatchu+|whachu+|wutcha+)\b/g, 'what you')
+    .replace(/\b(?:whatsup+|wassup+|wazzup+)\b/g, 'wsg')
+    .replace(/\b(?:wut|wat|wht)\b/g, 'what')
+    .replace(/\b(?:d+o+i+n+g?|duin+g?)\b/g, 'doing')
+    .replace(/\bup\s?2\b/g, 'up to')
+    .replace(/\bhow\s+(?:r|are)\s+(?:ya|u)\b/g, 'how are you')
+    .replace(/\bhow[sz]\b/g, 'how is')
+    .replace(/\b(?:gud|gudd+)\b/g, 'good')
+    .replace(/([a-z])\1{2,}/g, '$1$1')
+    .replace(/\s+/g, ' ')
+
+    .trim();
+}
 /**
  * Is the message nothing but greeting? Checked word by word, because people
  * stack them — "yo wsg", "hey yo", "wsg bro" are all still just hello, and
@@ -218,6 +243,19 @@ export function isSmallTalk(text) {
     .split(/\s+/)
     .filter(Boolean);
   return words.length > 0 && words.every((word) => FILLER_WORDS.has(word));
+}
+
+/**
+ * Obvious keyboard mash has no conversational intent. Keep this deliberately
+ * narrow: ordinary slang and misspellings should still reach the model.
+ */
+export function isLikelyGibberish(text) {
+  const words = String(text ?? '').toLowerCase().match(/[a-z]+/g) ?? [];
+  if (!words.length) return false;
+  return words.every((word) => {
+    const vowels = (word.match(/[aeiouy]/g) ?? []).length;
+    return /(?:asdf|qwer|zxcv|hjkl|lkjh|poiuy)/.test(word) || (word.length >= 8 && vowels <= 1);
+  });
 }
 
 /**

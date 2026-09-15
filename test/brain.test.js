@@ -39,10 +39,12 @@ test('repeated blocking produces a chat line aimed at the blocker', async () => 
   for (const event of griefScript()) await ai.handle(event);
 
   assert.equal(said.length, 1);
-  assert.equal(said[0].message, 'dream move out of my path');
+  // Capped to chat.replyWords, and never left ending on a word that was
+  // reaching for the next one ("dream move out of" would be worse).
+  assert.equal(said[0].message, 'dream move');
   assert.equal(said[0].subject, 'xX_DreamSlayer_Xx');
   assert.equal(said[0].trigger, 'macro_check');
-  assert.equal(said[0].command, 'dream move out of my path');
+  assert.equal(said[0].command, 'dream move');
 });
 
 test('the prompt carries the short name and the blocking history', async () => {
@@ -76,7 +78,7 @@ test('an accusation gets answered in the channel it arrived on', async () => {
 
   assert.equal(said.length, 1);
   assert.equal(said[0].channel, 'party');
-  assert.equal(said[0].command, '/pc not macroing, report me then');
+  assert.equal(said[0].command, '/pc not macroing, report me');
 });
 
 test('respond=false keeps the bot silent', async () => {
@@ -178,7 +180,9 @@ test('drain hands queued actions to the bridge exactly once', async () => {
 });
 
 test('a sustained macro check escalates to a shouted reply', async () => {
-  const replies = ['dream im real move', 'dream ive told you once already', 'dream move, im not a macro'];
+  // Short enough to survive chat.replyWords intact, so the rungs stay
+  // distinct — capped longer lines all collapsed to "dream move".
+  const replies = ['dream im real move', 'dream ive told you', 'dream last warning'];
   let call = 0;
   const ai = createChatAI({
     username: '3172',
@@ -205,7 +209,7 @@ test('a sustained macro check escalates to a shouted reply', async () => {
 
   assert.deepEqual(said.map((a) => a.anger), [1, 2, 3]);
   assert.equal(said[0].message, 'dream im real move');
-  assert.equal(said[2].message, 'DREAM MOVE, IM NOT A MACRO', 'anger 3 is shouted');
+  assert.equal(said[2].message, 'DREAM LAST WARNING', 'anger 3 is shouted');
 });
 
 test('the chill persona hardens but never shouts', async () => {
@@ -299,10 +303,9 @@ test('a near-repeat is rewritten, not sent', async () => {
     await ai.handle({ type: 'pathfinder', state: 'blocked', blockedBy: { name: 'xX_DreamSlayer_Xx', distance: 1.4 } });
   }
 
-  assert.deepEqual(said.map((a) => a.message), [
-    'dream move out of my path',
-    'been at this since 4am, you are not the first to check',
-  ]);
+  // Both capped to chat.replyWords. The point of the test is that the reword
+  // in the middle was caught, not how long the survivors are.
+  assert.deepEqual(said.map((a) => a.message), ['dream move', 'been at this']);
   assert.equal(call, 3, 'the reword cost one extra call');
   assert.match(prompts[2], /too close to something above/);
 });
@@ -334,7 +337,8 @@ test('the model is shown what it already said', async () => {
 
   assert.doesNotMatch(prompts[0], /already said these/i, 'nothing to avoid on the first line');
   assert.match(prompts[1], /You have already said these/);
-  assert.match(prompts[1], /line 0 about ghosts and mist/);
+  // What it is shown is what actually went out, which is capped.
+  assert.match(prompts[1], /line 0 about ghosts/);
   assert.match(prompts[1], /Say something new or say nothing/);
 });
 
@@ -418,7 +422,7 @@ test('the model is told to name the grind rather than deflect', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 9 }] });
   await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
 
-  assert.match(capture.params.messages[0].content, /They asked what you are doing — say it/);
+  assert.match(capture.params.messages[0].content, /They asked what you are doing\. Keep the answer tiny/);
 });
 
 test('a fair claim gets conceded, and differently each time', async () => {
@@ -802,7 +806,7 @@ test('a terse reply is cut down mechanically, name and all', async () => {
   assert.equal(said.at(-1).message, 'all g');
 });
 
-test('a normal reply keeps its length, and loses the name', async () => {
+test('a normal reply is capped and loses the name', async () => {
   const ai = createChatAI({
     username: '3172',
     client: mockClient({ respond: true, message: 'been grinding ghosts since about 4am dream', reason: '' }),
@@ -812,9 +816,10 @@ test('a normal reply keeps its length, and loses the name', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
   await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172 how long you been at it' });
 
-  // Full length: the terse rules do not apply to a real answer. But the name
-  // goes, because outside a call-out it is the clearest tell there is.
-  assert.equal(said[0].message, 'been grinding ghosts since about 4am');
+  // Capped to chat.replyWords, and never left ending on a word reaching for
+  // the next one. The name goes too: outside a call-out it is the clearest
+  // tell there is.
+  assert.equal(said[0].message, 'been grinding ghosts');
 });
 
 test('the prompt carries the slang it needs to read and write', async () => {
@@ -828,7 +833,7 @@ test('the prompt carries the slang it needs to read and write', async () => {
   await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 hows the mf looking' });
 
   const system = capture.params.system[0].text;
-  for (const term of ['mf — magic find', 'bz / baz — bazaar', 'hotm — heart of the mountain', 'ngl', 'sorrow / volta / plasma']) {
+  for (const term of ['mf — magic find', 'bz / baz — bazaar', 'hotm — heart of the mountain', 'ngl', 'sorrow / volta / plasma', 'pmo — context-dependent', 'lbin — lowest current buy-it-now', 'kuudra — Crimson Isle boss']) {
     assert.ok(system.includes(term), `missing "${term}"`);
   }
   assert.match(system, /gexp — guild xp/, 'user additions land too');
@@ -1022,7 +1027,8 @@ test('being asked what you are doing still gets the grind named', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
   await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 wyd' });
 
-  assert.match(capture.params.messages[0].content, /They asked what you are doing — say it/);
+  assert.match(capture.params.messages[0].content, /They asked what you are doing\. Keep the answer tiny/);
+  assert.match(capture.params.messages[0].content, /"ghosts", "still ghosts"/);
 });
 
 test('a compliment is not confused with an accusation or a check', async () => {

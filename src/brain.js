@@ -98,6 +98,15 @@ export class ChatAI extends EventEmitter {
     this.noteMood(message, trigger, ts);
 
     if (!trigger) {
+      // Say why, when the reason is a decision rather than "nothing happened".
+      // A cutoff that logs nothing is indistinguishable from the bot being
+      // broken, and this project's whole debugging story is the decision log.
+      if (this.store.isPestering(message.sender, this.config.detect.macroCheck.windowMs, ts)) {
+        this.emit('skip', {
+          trigger: null,
+          reason: `letting it go — ${shortName(message.sender, { overrides: this.config.shortNames })} has been at this all session`,
+        });
+      }
       // Even with nothing to say back, enough grief is enough.
       this.maybeLeave(ts, 800);
       return null;
@@ -207,13 +216,29 @@ export class ChatAI extends EventEmitter {
       .slice(0, this.config.chat.avoidHistory);
     const nameFatigue = this.nameFatigue(trigger);
     const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
-    // A bare call-out or an acknowledgement gets two words, no name, always.
+    // A call-out keeps the name. Telling the player in your pathfinder to move,
+    // by their short name, is the thing this was built to do, and the canned
+    // lines interpolate it — stripping it leaves " move". Everywhere else the
+    // name goes, because outside a call-out it is the clearest tell there is.
+    // The pathfinder call-out is the one reply that keeps the name: telling the
+    // player in your way to move, by their short name, is what this was built
+    // to do, and the canned lines interpolate it — stripping leaves " move".
+    // A typed "you a macro?" is the same kind but a conversation, so it loses
+    // the name like any other reply and gets room to actually answer. Capping
+    // it at two words turned "been at this since 4am, you are not the first to
+    // check" into "been".
+    const callOut = trigger.kind === 'macro_check' && !trigger.conversational;
+    const replyNames = callOut
+      ? []
+      : [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })];
+    // A call-out is short but not two words. At two, every rung of the anger
+    // ladder truncates to the same opening pair — "dream im", "dream ive",
+    // "dream move" all became "dream im" — and the repeat guard then
+    // suppressed every escalation after the first. Escalation is precisely
+    // what a call-out is for, so it gets the ordinary cap.
     const terse = (trigger.opener || trigger.smalltalk || trigger.uncertain || trigger.closes)
-      ? {
-          maxWords: this.config.chat.terseWords,
-          stripNames: [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })],
-        }
-      : {};
+      ? { maxWords: this.config.chat.terseWords, stripNames: replyNames }
+      : { maxWords: this.config.chat.replyWords, stripNames: replyNames };
 
     const mood = this.store.annoyanceLevel(this.config, ts);
     let decision = await this.think(trigger, ts, { avoid, nameFatigue, mood });
@@ -233,18 +258,7 @@ export class ChatAI extends EventEmitter {
       short(trigger.subject),
     ].filter(Boolean);
 
-    // Asking the model to leave the name out works most of the time, which is
-    // not the same as working. Observed: told plainly not to, two replies in
-    // four still opened with "Dream". Outside a call-out the name is stripped
-    // rather than requested — a guarantee, not a preference.
-    const stripNames = trigger.kind === 'macro_check' ? [] : speakers.filter((n) => n !== this.config.username);
-
-    let clean = sanitize(decision.message, this.config, {
-      shout,
-      speakers,
-      stripNames,
-      ...terse,
-    });
+    let clean = sanitize(decision.message, this.config, { shout, speakers, ...terse });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
@@ -267,7 +281,7 @@ export class ChatAI extends EventEmitter {
         alreadyAnswered: final.repeat?.match ?? null,
       });
       if (retry?.respond && retry.message) {
-        const retryClean = sanitize(retry.message, this.config, { shout, speakers, stripNames, ...terse });
+        const retryClean = sanitize(retry.message, this.config, { shout, speakers, ...terse });
         if (retryClean.ok) {
           const retryCheck = this.policy.check(trigger, retryClean.message);
           if (retryCheck.allowed) {
@@ -344,6 +358,9 @@ export class ChatAI extends EventEmitter {
    * @returns {Promise<{respond:boolean, message:string, reason:string, source:string}|null>}
    */
   async think(trigger, ts, options) {
+    if (trigger.forceFallback) {
+      return this.fallback.decide(this.store, trigger);
+    }
     if (!this.usingApi) {
       return this.config.llm.fallbackOnError || !this.responder.available
         ? this.fallback.decide(this.store, trigger)

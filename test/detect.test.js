@@ -63,6 +63,7 @@ test('an accusation naming us counts even from far away', () => {
   const { config, store } = setup();
   const trigger = detectFromChat(store, config, chat('Stranger', 'techno is 100% cheating'), NOW);
   assert.equal(trigger?.kind, 'accusation');
+  assert.equal(detectFromChat(store, config, chat('Stranger', 'u macroing?'), NOW), null, 'a distant second-person accusation is too ambiguous');
 });
 
 test('accusations outrank plain mentions', () => {
@@ -127,6 +128,13 @@ test('macro-check talk from across the lobby is ignored', () => {
   const { config, store } = setup();
   const trigger = detectFromChat(store, config, chat('Stranger', 'say something'), NOW);
   assert.equal(trigger, null);
+});
+
+test('a player who keeps macro checking is ignored for the rest of the window', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Checker', distance: 3 }], NOW);
+  for (let i = 0; i < 3; i += 1) store.recordCheck('Checker', NOW - i * 1000);
+  assert.equal(detectFromChat(store, config, chat('Checker', 'yo wsg 3172'), NOW), null);
 });
 
 test('a fair claim on the spot is its own thing, not hostility', () => {
@@ -244,6 +252,15 @@ test('a bare insult from someone next to us is still taken personally', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', 'cheater'), NOW)?.kind, 'accusation');
+  assert.equal(detectFromChat(store, config, chat('Dream', 'fuck you'), NOW)?.kind, 'hostile');
+});
+
+test('reads a hostile line followed by our name as one turn', () => {
+  const { config, store } = setup({ username: '3172' });
+  const first = store.addChat({ ...chat('Dream', 'yo fuck you'), ts: NOW - 1000 });
+  const second = store.addChat({ ...chat('Dream', '3172'), ts: NOW });
+  assert.equal(first.content, 'yo fuck you');
+  assert.equal(detectFromChat(store, config, second, NOW)?.kind, 'hostile');
 });
 
 test('stacked greetings are still just hello', () => {
@@ -256,6 +273,35 @@ test('stacked greetings are still just hello', () => {
   }
 });
 
+
+test('normalizes conversational shorthand and small typos before matching intent', () => {
+  const cases = [
+    ['3172 watcha doin', 'askedActivity'],
+    ['3172 whatchu up2', 'askedActivity'],
+    ['3172 wut u doinnn', 'askedActivity'],
+    ['3172 how r u doinn', 'askedWellbeing'],
+  ];
+  for (const [text, expected] of cases) {
+    const { config, store } = setup({ username: '3172' });
+    store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.equal(trigger?.[expected], true, `"${text}" should be ${expected}`);
+  }
+});
+
+test('does not call the model for an obvious keyboard smash', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172 asdfghjkl'), NOW), null);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172 qwertyuiop'), NOW), null);
+});
+
+test('does not merge a keyboard smash into an earlier normal conversation line', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  store.openConversation('Dream', NOW - 1000);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'Doskdnfj'), NOW), null);
+});
 test('a greeting with a question attached is not just a greeting', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);

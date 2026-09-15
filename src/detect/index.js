@@ -13,6 +13,8 @@ import {
   nearMiss,
   isGreetingOnly,
   isSmallTalk,
+  isLikelyGibberish,
+  normalizeChatText,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
   MUTE_NOTICE,
@@ -218,8 +220,8 @@ export function detectStandDown(store, config, message, ts = Date.now()) {
 
 /**
  * Detects someone accusing us of cheating/macroing. Requires the accusation to
- * be aimed at us: our name is in it, they are nearby, they have been blocking
- * us, or they are replying just after we spoke.
+ * be aimed at us: our name is in it, they are nearby, or they have been
+ * blocking us. A distant "u macroing" is too ambiguous to answer.
  */
 export function detectAccusation(store, config, message, ts = Date.now()) {
   if (!message.sender || message.system) return null;
@@ -227,7 +229,7 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
   if (config.ignore.includes(message.sender)) return null;
   if (!ACCUSATION.test(message.content)) return null;
 
-  const { requireDirected, replyWindowMs } = config.detect.accusation;
+  const { requireDirected } = config.detect.accusation;
   const named = mentions(message.content, config.username, config.aliases);
 
   // "most people macro that" is a remark about the game, not a charge against
@@ -236,21 +238,22 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
   if (target === 'someone-else') return null;
   const nearby = store.isNearby(message.sender, config.detect.chatRadius, ts);
   const hasHistory = store.blocksWithin(message.sender, 120000, ts) > 0;
-  const repliedToUs = store.lastOutgoing && ts - store.lastOutgoing.ts <= replyWindowMs;
-
-  // Pointed straight at us ("u macroing?") needs no further corroboration.
-  // Anything vaguer has to be plausibly aimed at us by the situation.
-  const directed = target === 'us' || named || nearby || hasHistory || repliedToUs;
+  // A name is explicit; otherwise, physical proximity or a recent obstruction
+  // makes a second-person accusation plausibly about us. Across the lobby it
+  // is just as likely to be aimed at another player, so stay out of it.
+  const directed = named || nearby || hasHistory;
   if (requireDirected && !directed) return null;
 
   const priors = (store.players.get(message.sender)?.accusations ?? []).filter(
     (t) => ts - t <= 300000,
   ).length;
-
+  const anger = priors >= 2 ? 3 : priors >= 1 ? 2 : 1;
   return {
     kind: 'accusation',
     subject: message.sender,
-    severity: priors >= 2 ? 3 : 2,
+    severity: anger,
+    anger,
+    escalates: anger > 1,
     conversational: true,
     evidence:
       `${message.sender} said "${message.content}" — they are accusing me of cheating or macroing` +
@@ -304,8 +307,10 @@ export function detectHostile(store, config, message, ts = Date.now()) {
   if (!message.sender || message.system) return null;
   if (message.sender === config.username) return null;
   if (config.ignore.includes(message.sender)) return null;
-  if (!HOSTILE_NUDGE.test(message.content)) return null;
-  if (!mentions(message.content, config.username, config.aliases) &&
+  const burst = recentBurst(store, message, config, ts);
+  const content = burst.length ? burst.concat(message.content).join(' ') : message.content;
+  if (!HOSTILE_NUDGE.test(content)) return null;
+  if (!mentions(content, config.username, config.aliases) &&
       !store.isNearby(message.sender, config.detect.chatRadius, ts)) {
     return null;
   }
@@ -315,7 +320,9 @@ export function detectHostile(store, config, message, ts = Date.now()) {
     subject: message.sender,
     severity: 1,
     conversational: true,
-    evidence: `${message.sender} said "${message.content}" while standing near me.`,
+    // A canned hostile line cannot drift into unrelated context such as a prior macro check.
+    forceFallback: /\bfuck\s?(?:you|u)\b|\b(?:bitch|dumbass)\b/i.test(content),
+    evidence: `${message.sender} said "${content}" while standing near me.`,
     channel: message.channel === 'whisper' ? 'whisper' : message.channel,
   };
 }
@@ -359,6 +366,9 @@ export function detectMention(store, config, message, ts = Date.now()) {
       !(isWhisper && config.detect.mention.answerWhispers)) {
     return null;
   }
+  // Check the newest line before merging a fast multi-line turn. Otherwise a
+  // keyboard smash can borrow meaning from a previous, normal line.
+  if (isLikelyGibberish(message.content)) return null;
 
   // People type in bursts: "Yo how ur day?" then "3172?" a second later. Only
   // the second one names us, and read alone it is a bare call-out — so the
@@ -375,6 +385,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
     .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), content)
     .replace(/\s+/g, ' ')
     .trim();
+  if (isLikelyGibberish(remainder)) return null;
   const opener = isGreetingOnly(remainder);
   // "3172" on its own and "yo" are both openers, but they want opposite
   // replies: a bare name call wants "?", a greeting wants a greeting back.
@@ -445,17 +456,20 @@ export function detectMuted(message) {
  * @returns {Trigger|null}
  */
 export function detectFromChat(store, config, message, ts = Date.now()) {
+  const normalized = { ...message, content: normalizeChatText(message.content) };
+  const macroCheck = detectMacroCheckTalk(store, config, normalized, ts);
+  if (macroCheck) return macroCheck;
+  if (store.isPestering(normalized.sender, config.detect.macroCheck.windowMs, ts)) return null;
   return (
     // A denial answers a question we asked, so it comes before everything.
-    detectStandDown(store, config, message, ts) ??
-    detectMacroCheckTalk(store, config, message, ts) ??
-    detectAccusation(store, config, message, ts) ??
-    detectSpotClaim(store, config, message, ts) ??
-    detectHostile(store, config, message, ts) ??
+    detectStandDown(store, config, normalized, ts) ??
+    detectAccusation(store, config, normalized, ts) ??
+    detectSpotClaim(store, config, normalized, ts) ??
+    detectHostile(store, config, normalized, ts) ??
     // Before the plain mention: "yo 3712" contains a greeting, but it also
     // contains an attempt at a name that missed. Asking beats assuming.
     detectNearMiss(store, config, message, ts) ??
-    detectMention(store, config, message, ts) ??
+    detectMention(store, config, normalized, ts) ??
     null
   );
 }
@@ -484,5 +498,5 @@ function recentBurst(store, message, config, ts) {
         line.ts > answeredAt &&
         line.content,
     )
-    .map((line) => line.content);
+    .map((line) => normalizeChatText(line.content));
 }

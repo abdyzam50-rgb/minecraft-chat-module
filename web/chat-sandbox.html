@@ -481,6 +481,7 @@
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       spot_claim: ["mb, ill move", "oh sorry, all yours", "my bad, ill shift over", "no worries, ill find another spawn", "ah mb, moving now"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
+      hostile_followup: ["still on that?", "what now?"],
       opener: ["yh?", "?", "sup", "whats up"],
       greeting: ["yo", "wsg", "hey", "ey"],
       smalltalk: ["all g", "no worries", "all good", "np"],
@@ -503,6 +504,7 @@
       ],
       spot_claim: ["mb ill move", "fair enough, ill shift", "all yours", "aight, moving", "yeah fair, ill go elsewhere"],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
+      hostile_followup: ["can you read?", "still here?"],
       opener: ["?", "yh?", "what", "wha"],
       greeting: ["yo", "wsg", "ey", "sup"],
       smalltalk: ["all g", "np", "cool", "yh"],
@@ -514,17 +516,18 @@
     unfiltered: {
       shouts: true,
       macro_check: {
-        1: ["{short} im real, get the hell out of my path", "{short} macro check's over, move"],
-        2: ["{short} move. seriously. ive told you twice.", "{short} im not a macro, now piss off"],
-        3: ["{short} get out of my face you absolute muppet, im not a macro", "{short} move. right now. ive had enough of you."],
+        1: ["im real", "fuck off"],
+        2: ["move dumbass", "fuck off"],
+        3: ["get lost", "fuck off"],
       },
       accusation: [
-        "i'm not cheating you muppet, go touch grass",
-        "not macroing, you're just bad at this game",
-        "report me then, dipshit",
+        "fuck you, im not cheating",
+        "get a life",
+        "report it then bitch",
       ],
-      spot_claim: ["mb ill move", "aight fair, moving", "yeah alright, all yours", "fine, ill shift over", "my bad, going"],
-      hostile: ["piss off, it's a public lobby", "get lost"],
+      spot_claim: ["idc fuck off", "go fuck yourself", "cry about it", "not moving", "fuck you, find another spot", "cry harder", "touch grass", "keep coping", "nobody asked", "move then"],
+      hostile: ["fuck off", "get a life", "stop being a bitch", "fuck you", "fuck you too", "cry harder", "touch grass", "keep coping", "nobody asked"],
+      hostile_followup: ["i said fuck off", "can u read", "weirdo", "still yapping"],
       opener: ["?", "what", "wha", "yh"],
       greeting: ["yo", "wsg", "ey", "hey"],
       smalltalk: ["all g", "np", "yh", "cool"],
@@ -575,7 +578,9 @@
   /* ---------- detectors (src/detect/) ---------- */
 
   const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
-  const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
+  const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away|fuck\s?(?:you|u|off)|shut\s?up|bitch\b|dumbass|get\s?a\s?life/i;
+  // Direct insults use the hostile reply pool so old context cannot leak in.
+  const DIRECT_INSULT = /\bfuck\s?(?:you|u)\b|\b(?:bitch|dumbass)\b/i;
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   /**
@@ -606,6 +611,11 @@
   /** The last thing we said, or null. */
   function lastSaid() {
     return state.sent.length ? state.sent[state.sent.length - 1] : null;
+  }
+
+  function recentDirectHostilityFrom(name, ts) {
+    const last = state.sent.slice().reverse().find(function (line) { return line.subject === name; });
+    return Boolean(last && last.kind === "hostile" && last.forceFallback && ts - last.ts <= 60000);
   }
 
   /** Did our last line end with a question? Ask-backs carry no question mark. */
@@ -765,11 +775,9 @@
     greetingRadius: 5,   // close enough that a bare "yo" is meant for us
     spotClaimRadius: 20, // a spot claim reaches further
   };
-  const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 12, maxArgumentTurns: 3 };
-  const ARGUMENT_KINDS = ["accusation", "hostile"];
-  // Answering a typed macro check is not optional: silence is exactly what it
-  // tests for, and a bot that has talked itself into a rate limit fails it.
-  const MUST_ANSWER = ["macro_check"];
+  const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 24, maxArgumentTurns: 3 };
+  const ARGUMENT_KINDS = ["accusation", "hostile", "macro_check"];
+  const REPEAT_MEMORY = 24; // finite session memory; older repeats are normal
 
   const LIMITS = {
     globalCooldownMs: 8000, perPlayerCooldownMs: 60000, perKindCooldownMs: 20000,
@@ -791,6 +799,9 @@
     [/\bass(?:hole)?\b/gi, "muppet"], [/\bdick(?:head)?\b/gi, "muppet"],
     [/\bdamn\b/gi, "darn"], [/\bhell\b/gi, "heck"], [/\bpiss\s?off\b/gi, "buzz off"],
   ];
+
+  /** Words that cannot end a line — they are always reaching for the next one. */
+  const DANGLING = /\s+(?:since|about|of|and|but|or|to|for|with|at|in|on|by|from|than|then|so|because|cause|cos|coz|if|when|while|my|your|ur|the|a|an|is|are|was|been|got|just|still|like|out|up|off|over|into|onto)$/i;
 
   function sanitize(raw, shout, terse, speakers) {
     let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
@@ -826,6 +837,17 @@
         // Falling back to the last complete clause gives "hey".
         const clause = cut.replace(/[,;:—-]\s*\S*$/, "").trim();
         text = clause && /[,;:—-]/.test(cut) ? clause : cut;
+        // A word cap lands mid-phrase: "move out of my path" cut to four is
+        // "move out of". Drop words that were reaching for the next one,
+        // repeatedly, since dropping "of" still leaves "out" hanging.
+        for (let i = 0; i < 4 && DANGLING.test(text); i++) {
+          const shorter = text.replace(DANGLING, "").trim();
+          if (!shorter) break;
+          text = shorter;
+        }
+      }
+      if (terse.maxWords <= 2) {
+        text = text.replace(/^get a$/i, "get lost").replace(/^go fuck$/i, "fuck off");
       }
       // Never tidy into nothing: "?" is a complete reply to a bare call-out.
       const tidied = text.replace(/^[\s,;:.!?-]+/, "").replace(/[\s,;:-]+$/, "").trim();
@@ -1034,10 +1056,9 @@
     // that stop us pestering a player unprompted.
     const conversing = Boolean(trigger.conversational);
     const arguing = ARGUMENT_KINDS.indexOf(trigger.kind) !== -1;
-    const mustAnswer = MUST_ANSWER.indexOf(trigger.kind) !== -1 && conversing;
     const last = state.sent[state.sent.length - 1];
     const baseGap = conversing ? CONVO.cooldownMs : LIMITS.globalCooldownMs;
-    const gap = mustAnswer ? Math.min(baseGap, 1000) : baseGap;
+    const gap = baseGap;
     if (last && ts - last.ts < gap) {
       return { allowed: false, reason: (conversing ? "still finishing the last reply, " : "global cooldown, ") +
         Math.ceil((gap - (ts - last.ts)) / 1000) + "s left" };
@@ -1049,12 +1070,12 @@
     // per-kind and per-player brakes step aside — a whole macro check happens
     // inside one 60s window. The consecutive cap below still bounds it.
     const escalating = Boolean(trigger.escalates);
-    const relaxed = escalating || conversing || mustAnswer;
+    const relaxed = escalating || conversing;
     const sameKind = [...state.sent].reverse().find((s) => s.kind === trigger.kind);
     if (!relaxed && sameKind && ts - sameKind.ts < LIMITS.perKindCooldownMs) {
       return { allowed: false, reason: "cooldown for " + trigger.kind };
     }
-    if (trigger.subject && !mustAnswer) {
+    if (trigger.subject) {
       const samePlayer = [...state.sent].reverse().find((s) => s.subject === trigger.subject);
       if (!relaxed && samePlayer && ts - samePlayer.ts < LIMITS.perPlayerCooldownMs) {
         return { allowed: false, reason: "cooldown for " + shortName(trigger.subject) };
@@ -1076,7 +1097,8 @@
           : "already replied to " + shortName(trigger.subject) + " " + streak + "x in a row" };
       }
     }
-    if (message && state.sent.some((s) => s.message === message && ts - s.ts <= LIMITS.dedupeWindowMs)) {
+    const recent = state.sent.slice(-REPEAT_MEMORY);
+    if (message && recent.some((s) => s.message === message)) {
       return { allowed: false, reason: "duplicate message" };
     }
     return { allowed: true };
@@ -1183,7 +1205,7 @@
   function buildPrompt(trigger, avoid, rejected, alreadyAnswered) {
     const persona = { chill: "calm and friendly, never insults, never swears",
       snarky: "dry, blunt, dismissive, trash talk is fine but no swearing",
-      unfiltered: "aggressive and profane, zero patience" }[state.persona];
+      unfiltered: "aggressive, profane, blunt, and sharply dismissive of direct hostility" }[state.persona];
     const tone = { 1: "mildly annoyed — tell them you are real and to move, no scene yet",
       2: "fed up — you already told them once and they came straight back, colder and shorter",
       3: "furious — they have ignored you twice and are still in your face" }[trigger.anger || 1];
@@ -1197,10 +1219,12 @@
       "Ghost grinding pays well and everyone knows it. Being called rich is a compliment here, not an accusation — take it. Coins, drops and how long you have been at it are ordinary small talk, nothing to be cagey about.",
       "The Mist is the most macro-accused grind in the game, so other players constantly run their own macro checks: they stand in your face or ask you to prove you are real, to see whether you react like a person.",
       "",
-      "Write ONE line of Minecraft chat. Short — a handful of words, around 40 characters, 100 absolute max. Lowercase, clipped, typos fine.",
+      "Write ONE line of Minecraft chat. Short by default: most replies are one to three words. Use a longer line only when a specific question needs it; around 24 characters is the comfort limit and 100 is absolute max. Lowercase, clipped, typos fine.",
+      "Prefer shorthand over a complete sentence: \"ghosts\", \"still ghosts\", \"yh\", \"idk\", \"mb\", \"all g\". Do not pad a reply with a greeting, explanation, or question just to make it longer.",
       "A full tidy sentence is the giveaway. Sometimes the whole reply is one word, or one character.",
       "Mostly leave names out: in a back-and-forth they know you are talking to them, and tacking their name onto every line is the clearest sign something automated is typing.",
       "Persona: " + persona + ".",
+      (state.persona === "unfiltered" && (trigger.kind === "hostile" || trigger.kind === "accusation" || trigger.kind === "macro_check")) ? "This is direct hostility. Be sharply dismissive, no politeness or explanation; a brief swear is fine, but attack their behavior only." : "",
       "Tone right now: " + tone + ".",
       (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
       "",
@@ -1213,6 +1237,7 @@
       KNOWLEDGE,
       "You grind ghosts. You are not an authority on the rest of the game and the meta moves constantly. If you are not sure, say so: \"idk tbh\", \"no clue mate\", \"not my area\". Never invent prices, drop rates or advice, and never present a guess as fact. A wrong answer given confidently is worse than no answer.",
       "If you do not understand what they said — unfamiliar slang, a typo, no context — say so in the shortest way: \"uh what?\", \"what?\", \"wdym\", \"eh?\". Then let them explain. Guessing is what a bot does, and guessing wrong is far more obvious than asking.",
+      "Confusing but readable speech is not hostility. Use \"?\" or \"wdym\"; do not swear, insult, or act angry unless they directly insulted you.",
       "SkyBlock terms: ah (auction house), bz/baz (bazaar), bin, flip, lowball, k/m/b coins, npc price, insta-buy, mf (magic find), ms (mining speed), hotm, powder, ch (crystal hollows), div, scatha, the mist, sorrow/volta/plasma/ghostly boots (the ghost drops), cata, f1-f7, m1-m7, carry, comp, sven/tara/eman/rev, t4/t5, aote, hype, juju, term, gdrag, hpb, clean, 3/4, cc/cd/def/ehp/int/str, ironman, mayor, lfg.",
       "Never: slurs, attacks on who someone is, anything about real life, links, a line starting with /, or \"kys\" and anything like it.",
       "Never mention being an AI.",
@@ -1230,7 +1255,8 @@
       trigger.compliment
         ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
         : "",
-      trigger.askedActivity ? "They asked what you are doing — say it: you are grinding ghosts." : "",
+      trigger.kind === "macro_check" ? 'This is a macro check. Reply in one or two words only: "yh real", "real", "what", or "move". Do not explain, argue, or add their name.' : "",
+      trigger.askedActivity ? 'They asked what you are doing. Keep the answer tiny: "ghosts", "still ghosts", "ghost grinding", or "doing ghosts". Do not turn it into a sentence or add "you?" unless they asked more than that.' : "",
       trigger.answeredUs
         ? "You asked them something and this is their answer. They have not asked you anything back, so the exchange is finished. Set respond to false — saying nothing is what a person does here. Do not acknowledge it, do not start a new subject, and above all do not tell them what you are doing."
         : "",
@@ -1250,7 +1276,9 @@
         ? "This one is an accusation. Do not admit to anything, do not explain your setup, do not lecture them about the rules. Deny it once, briefly, and move on."
         : "",
       trigger.kind === "spot_claim"
-        ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
+        ? (state.persona === "unfiltered"
+          ? 'They are claiming this spot. Be blunt and dismissive if you reply: "idc", "not moving", "cry harder", "touch grass", "keep coping", "nobody asked", "go fuck yourself". Keep it to their in-game behavior; no identity-based insults.'
+          : 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.')
         : "",
       (trigger.kind === "mention" || trigger.kind === "whisper")
         ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question.'
@@ -1280,11 +1308,18 @@
   function chatHistory() {
     return Array.from(chatLog.children)
       .filter((n) => !n.classList.contains("typing"))
-      .slice(-10)
+      .slice(-24)
       .map((n) => n.textContent.trim());
   }
 
   async function writeLine(trigger, avoid, rejected, alreadyAnswered) {
+    if (trigger.forceFallback) {
+      return {
+        source: "canned",
+        message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)),
+        reason: "direct insult",
+      };
+    }
     if (workerApiUrl) {
       try {
         const response = await fetch(workerApiUrl + "/api/reply", {
@@ -1418,15 +1453,26 @@
 
   function terseFor(trigger) {
     const names = [trigger.subject, shortName(trigger.subject || "")].filter(Boolean);
-    // Asking the model to leave the name out works most of the time, which is
-    // not the same as working — two replies in four still opened with "Dream"
-    // after being told plainly not to. Outside a call-out it is stripped.
+    // A call-out keeps the name. Telling the player in your pathfinder to move
+    // by their short name is what this was built to do, and the canned lines
+    // interpolate {short}, so stripping it leaves " move". Everywhere else the
+    // name goes: asking the model to leave it out worked most of the time,
+    // which is not the same as working.
     const stripNames = trigger.kind === "macro_check" ? [] : names;
 
-    if (!trigger.opener && !trigger.greeting && !trigger.smalltalk && !trigger.uncertain && !trigger.closes) {
-      return stripNames.length ? { maxWords: 0, stripNames: stripNames } : null;
+    if (trigger.opener || trigger.greeting || trigger.smalltalk || trigger.uncertain || trigger.closes || trigger.kind === "macro_check") {
+      return { maxWords: 2, stripNames: stripNames };
     }
-    return { maxWords: 2, stripNames: names };
+    return { maxWords: 4, stripNames: stripNames };
+  }
+
+  function isLikelyGibberish(text) {
+    const words = String(text || "").toLowerCase().match(/[a-z]+/g) || [];
+    if (!words.length) return false;
+    return words.every(function (word) {
+      const vowels = (word.match(/[aeiouy]/g) || []).length;
+      return /(?:asdf|qwer|zxcv|hjkl|lkjh|poiuy)/.test(word) || (word.length >= 8 && vowels <= 1);
+    });
   }
 
   /* ---------- the pipeline ---------- */
@@ -1465,7 +1511,7 @@
     let gate = checkPolicy(trigger, null);
     if (!gate.allowed) return logEntry("limit", gate.reason);
 
-    const avoid = state.sent.slice(-8).map((s) => s.message).reverse();
+    const avoid = state.sent.slice(-REPEAT_MEMORY).map((s) => s.message).reverse();
     const typing = showTyping();
     let scheduled = false;
 
@@ -1495,7 +1541,7 @@
       gate = checkPolicy(trigger, attempt.message);
       if (!gate.allowed) return logEntry("limit", gate.reason);
 
-      state.sent.push({ ts: Date.now(), message: attempt.message, subject: trigger.subject, kind: trigger.kind });
+      state.sent.push({ ts: Date.now(), message: attempt.message, subject: trigger.subject, kind: trigger.kind, forceFallback: Boolean(trigger.forceFallback) });
       if (trigger.anger && trigger.subject) {
         state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
       }
@@ -1539,7 +1585,8 @@
     if (maybeLeave(ts)) return;
     const nearby = player.distance <= DETECT.chatRadius;
     const nearForClaim = player.distance <= DETECT.spotClaimRadius;
-    const named = mentions(text, SELF);
+    const turn = burstText(player.name, text, ts);
+    const named = mentions(turn, SELF);
     const blockCount = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
 
     // They answered a question we asked. "no" closes the thread; "yeah" just
@@ -1557,7 +1604,7 @@
 
     // Most specific reading wins: "macro check, say something" matches the
     // accusation pattern too, but answering it on the ladder is the better reply.
-    if (MACRO_CHECK_TALK.test(text) && (nearby || named)) {
+    if (MACRO_CHECK_TALK.test(turn) && (nearby || named)) {
       state.checks[player.name] = (state.checks[player.name] || [])
         .filter(function (t) { return ts - t <= CHECK.windowMs; })
         .concat(ts);
@@ -1577,19 +1624,26 @@
       });
     }
 
-    if (ACCUSATION.test(text)) {
-      const target = accusationTarget(text, named);
+    if ((state.checks[player.name] || []).filter((t) => ts - t <= CHECK.windowMs).length >= 3 ||
+        (state.accusations[player.name] || 0) >= 3) {
+      return logEntry("skip", shortName(player.name) + " has already been answered enough — ignoring further pestering");
+    }
+
+    if (ACCUSATION.test(turn)) {
+      const target = accusationTarget(turn, named);
       if (target === "someone-else") {
-        // Falls through to the ordinary conversation path below.
+        return logEntry("skip", "accusation was about someone else — ignored");
       } else {
       const blocking = blockCount > 0;
-      if (target === "us" || named || nearby || blocking) {
+      if (named || nearby || blocking) {
         state.accusations[player.name] = (state.accusations[player.name] || 0) + 1;
+        const count = state.accusations[player.name];
+        const anger = count >= 3 ? 3 : count >= 2 ? 2 : 1;
         return respond({
-          kind: "accusation", subject: player.name, channel, conversational: true,
+          kind: "accusation", subject: player.name, channel, conversational: true, anger: anger, escalates: anger > 1,
           evidence: shortName(player.name) + " is accusing me of cheating" +
             (blocking ? ", right after blocking my path" : "") +
-            (state.accusations[player.name] > 1 ? " (#" + state.accusations[player.name] + " in 5min)" : ""),
+            (count > 1 ? " (#" + count + " this session)" : ""),
         });
       }
       return logEntry("skip", "accusation not aimed at me — ignored");
@@ -1598,8 +1652,8 @@
 
     // A fair claim on the spot — they were here first, or they are mining this
     // vein. Give way; arguing with a reasonable person is what a bot would do.
-    if (SPOT_CLAIM.test(text) && (nearForClaim || named) &&
-        !(AGGRESSIVE.test(text) && !POLITE.test(text))) {
+    if (SPOT_CLAIM.test(turn) && (nearForClaim || named) &&
+        !(AGGRESSIVE.test(turn) && !POLITE.test(turn))) {
       return respond({
         kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate", conversational: true,
         evidence: shortName(player.name) + ' said "' + escapeHtml(text) +
@@ -1607,10 +1661,11 @@
       });
     }
 
-    if (HOSTILE.test(text) && (named || nearby)) {
+    if (HOSTILE.test(turn) && (named || nearby)) {
       return respond({
         kind: "hostile", subject: player.name, channel, conversational: true,
-        evidence: shortName(player.name) + " told me to move while standing next to me",
+        forceFallback: DIRECT_INSULT.test(turn),
+        evidence: shortName(player.name) + " directly insulted me while standing next to me",
       });
     }
 
@@ -1628,14 +1683,27 @@
     // human thing this can do.
     const greetingUpClose = !named && isGreetingOnly(stripName(text)) &&
       player.distance <= DETECT.greetingRadius;
+    if (state.persona === "unfiltered" && isGreetingOnly(stripName(text)) &&
+        recentDirectHostilityFrom(player.name, ts) && (named || nearby)) {
+      return respond({
+        kind: "hostile_followup", subject: player.name, channel, conversational: true, forceFallback: true,
+        evidence: shortName(player.name) + " tried to restart chat right after directly insulting me",
+      });
+    }
+
     if (named || continuing || greetingUpClose) {
+      if (isLikelyGibberish(stripName(text))) {
+        return logEntry("skip", "obvious keyboard mash — no reply");
+      }
       // Strip our name and see whether anything was actually said. "yo 3172"
       // wants "?" back, not a sentence about ghost drops.
       // People type in bursts: "Yo how ur day?" then "3172?" a second later.
       // Only the second names us, and read alone it is a bare call-out, so the
       // question in the first line goes unanswered. Both lines are one turn.
-      const turn = burstText(player.name, text, ts);
       const remainder = stripName(turn);
+      if (isLikelyGibberish(remainder)) {
+        return logEntry("skip", "obvious keyboard mash — no reply");
+      }
       const opener = isGreetingOnly(remainder);
       // "3172" alone and "yo" are both openers and want opposite replies: a
       // bare name call wants "?", a greeting wants a greeting back.
@@ -1855,6 +1923,11 @@
 
   el("persona").addEventListener("change", (e) => {
     state.persona = e.target.value;
+    if (state.persona === "unfiltered" && state.profanity === "clean") {
+      state.profanity = "allow";
+      el("profanity").value = "allow";
+      logEntry("skip", "unfiltered enables profanity; switch the filter back to clean any time");
+    }
     logEntry("skip", "persona switched to <em>" + state.persona + "</em>");
   });
   el("profanity").addEventListener("change", (e) => {

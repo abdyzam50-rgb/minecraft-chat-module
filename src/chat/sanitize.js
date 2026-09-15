@@ -37,6 +37,13 @@ const NEVER = [
  *   answer, and "all g dream, ty" reads as a script.
  * @returns {{ok: boolean, message: string, reason?: string}}
  */
+/**
+ * Words that cannot end a sentence — they are always reaching for the next
+ * one. Trimming to a word count strands them constantly.
+ */
+const DANGLING =
+  /\s+(?:since|about|of|and|but|or|to|for|with|at|in|on|by|from|than|then|so|because|cause|cos|coz|if|when|while|my|your|ur|the|a|an|is|are|was|been|got|just|still|like|out|up|off|over|into|onto)$/i;
+
 export function sanitize(raw, config, options = {}) {
   let text = stripFormatting(String(raw ?? '')).replace(/[\r\n\t]+/g, ' ').trim();
   if (!text) return { ok: false, message: '', reason: 'empty' };
@@ -101,6 +108,23 @@ export function sanitize(raw, config, options = {}) {
       // thing a person would actually type.
       const clause = cut.replace(/[,;:—-]\s*\S*$/, '').trim();
       text = clause && /[,;:—-]/.test(cut) ? clause : cut;
+      // A hard word cap lands mid-phrase: "been grinding ghosts since about
+      // 4am" cut to four words is "been grinding ghosts since", and "move out
+      // of my path" is "move out". A line ending on a word that was reaching
+      // for the next one is worse than a shorter line, so drop it.
+      // Repeatedly: "move out of my path" cut to four is "move out of", and
+      // dropping "of" still leaves "out" reaching for something.
+      let trimmed = text;
+      for (let i = 0; i < 4 && DANGLING.test(trimmed); i += 1) {
+        const shorter = trimmed.replace(DANGLING, '').trim();
+        if (!shorter) break;
+        trimmed = shorter;
+      }
+      text = trimmed || text;
+    }
+    // Do not leave a cut-off fragment such as "get a" or "go fuck" in chat.
+    if (options.maxWords <= 2) {
+      text = text.replace(/^get a$/i, 'get lost').replace(/^go fuck$/i, 'fuck off');
     }
   }
 
