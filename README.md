@@ -129,6 +129,9 @@ as a local file it falls back to the canned lines and says so.
 
 ### GitHub Pages sandbox with Gemini
 
+Live at **https://abdyzam50-rgb.github.io/minecraft-chat-module/**, backed by
+the Worker at `https://minecraft-chat-gemini.abdyzam50.workers.dev`.
+
 `web/` publishes the same sandbox to GitHub Pages. It is the identical HTML the
 Artifact runs — the only difference is `config.js`:
 
@@ -164,6 +167,12 @@ chip reading `offline · lines repeat`.
 The Worker URL is public by design, so keep this deployment for testing unless
 you put Cloudflare Access in front of it. `ALLOWED_ORIGIN` stops other websites'
 browsers from reading replies; it does not authenticate direct requests.
+
+**Model choice moves.** `gemini-2.5-flash` was retired for new accounts during
+this build and every reply 404'd until the model was changed. The Worker passes
+Gemini's own error text through for exactly this reason — the message named both
+the problem and the replacement. Change the model in one place,
+`cloudflare-worker/wrangler.jsonc`, and push.
 
 ### Hooking up the client
 
