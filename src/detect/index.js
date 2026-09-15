@@ -364,6 +364,9 @@ export function detectMention(store, config, message, ts = Date.now()) {
     .replace(/\s+/g, ' ')
     .trim();
   const opener = isGreetingOnly(remainder);
+  // "3172" on its own and "yo" are both openers, but they want opposite
+  // replies: a bare name call wants "?", a greeting wants a greeting back.
+  const greeting = opener && remainder.length > 0;
   // "mb g", "cool cool", "aight bro" — an acknowledgement, not a question.
   const smalltalk = !opener && isSmallTalk(remainder);
   const compliment = !opener && !smalltalk && isCompliment(message.content, named);
@@ -377,6 +380,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
   return {
     kind: isWhisper ? 'whisper' : 'mention',
     subject: message.sender,
+    greeting,
     severity: 1,
     conversational: true,
     opener,

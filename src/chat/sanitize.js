@@ -77,7 +77,15 @@ export function sanitize(raw, config, options = {}) {
 
   if (options.maxWords) {
     const words = text.split(/\s+/).filter(Boolean);
-    if (words.length > options.maxWords) text = words.slice(0, options.maxWords).join(' ');
+    if (words.length > options.maxWords) {
+      const cut = words.slice(0, options.maxWords).join(' ');
+      // Cutting by word count lands mid-clause: "hey, doing good hbu" becomes
+      // "hey, doing", which is worse than the sentence it was shortening.
+      // Falling back to the last complete clause gives "hey" — short, and a
+      // thing a person would actually type.
+      const clause = cut.replace(/[,;:—-]\s*\S*$/, '').trim();
+      text = clause && /[,;:—-]/.test(cut) ? clause : cut;
+    }
   }
 
   // Tidy up whatever the trimming left behind — but never into nothing. "?" is

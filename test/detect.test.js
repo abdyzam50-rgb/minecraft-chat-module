@@ -439,3 +439,57 @@ test('a shuffled name counts, a stray number does not', () => {
   unrelated.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
   assert.equal(detectFromChat(unrelated.store, unrelated.config, chat('Dream', 'anyone got 4000 coins'), NOW), null);
 });
+
+test('a greeting and a bare name call are told apart', () => {
+  // Reported: xX_DreamSlayer_Xx said "yo" and got back "hbu" — an answer to a
+  // question nobody asked. No one opens a conversation that way; they say
+  // "yo" back. The two cases look identical to the opener flag, so the
+  // trigger has to distinguish them before the prompt can.
+  const config = resolveConfig({ username: '3172' });
+  const store = new ContextStore(config, () => NOW);
+  store.updateNearby([{ name: 'xX_DreamSlayer_Xx', distance: 3.2 }], NOW);
+
+  const greeting = detectFromChat(
+    store,
+    config,
+    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: 'yo', channel: 'all', ts: NOW }),
+    NOW,
+  );
+  assert.ok(greeting, 'a greeting from someone standing next to you is worth answering');
+  assert.equal(greeting.opener, true);
+  assert.equal(greeting.greeting, true, 'they actually said hello');
+
+  const bare = detectFromChat(
+    store,
+    config,
+    store.addChat({ sender: 'xX_DreamSlayer_Xx', content: '3172', channel: 'all', ts: NOW + 1000 }),
+    NOW + 1000,
+  );
+  assert.ok(bare);
+  assert.equal(bare.opener, true);
+  assert.equal(bare.greeting, false, 'a name with no hello is not a greeting');
+});
+
+test('the prompt tells a greeting to greet back, and says what not to reach for', async () => {
+  const { buildUserPrompt } = await import('../src/llm/prompt.js');
+  const config = resolveConfig({ username: '3172' });
+  const store = new ContextStore(config, () => NOW);
+
+  const greeted = buildUserPrompt(
+    store,
+    config,
+    { kind: 'mention', subject: 'Dream', channel: 'all', evidence: 'x', opener: true, greeting: true },
+    NOW,
+  );
+  assert.match(greeted, /greeted you/i);
+  assert.match(greeted, /hbu/, 'names the exact word that went wrong');
+
+  const called = buildUserPrompt(
+    store,
+    config,
+    { kind: 'mention', subject: 'Dream', channel: 'all', evidence: 'x', opener: true, greeting: false },
+    NOW,
+  );
+  assert.match(called, /called your name and said nothing else/i);
+  assert.ok(!/greeted you/i.test(called), 'a bare name call still wants "?"');
+});

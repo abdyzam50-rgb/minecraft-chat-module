@@ -73,3 +73,18 @@ test('the terse trim still does its job', () => {
   assert.equal(sanitize('all g dream, ty', clean, terse).message, 'all g');
   assert.equal(sanitize('Dream alr', clean, terse).message, 'alr');
 });
+
+test('trimming to a word count never leaves half a clause', () => {
+  // Observed live: "hey, doing good hbu" trimmed to two words came out as
+  // "hey, doing" — a fragment, which is a worse reply than the sentence it
+  // was shortening. Fall back to the last complete clause instead.
+  const config = resolveConfig({ username: '3172' });
+  assert.equal(sanitize('hey, doing good hbu', config, { maxWords: 2 }).message, 'hey');
+  assert.equal(sanitize('yo, whats good man', config, { maxWords: 2 }).message, 'yo');
+
+  // With no clause break there is nothing to fall back to, so a plain cut
+  // still applies — and it must not empty a reply that had content.
+  assert.equal(sanitize('just grinding ghosts here', config, { maxWords: 2 }).message, 'just grinding');
+  assert.equal(sanitize('?', config, { maxWords: 2 }).message, '?');
+  assert.equal(sanitize('yo wsg', config, { maxWords: 2 }).message, 'yo wsg');
+});

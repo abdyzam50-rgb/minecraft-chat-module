@@ -564,7 +564,8 @@ test('a bare call-out gets a one-word reply, not a life story', async () => {
   ai.on('say', (a) => said.push(a));
 
   await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
-  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: Yo 3172' });
+  // Just the name, no hello — the case that wants "?" back.
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172' });
 
   assert.equal(said.length, 1);
   const prompt = capture.params.messages[0].content;
@@ -913,7 +914,7 @@ test('a greeting does not get told what we are doing', async () => {
 
   assert.equal(said.length, 1);
   const prompt = capture.params.messages[0].content;
-  assert.match(prompt, /just called my name/);
+  assert.match(prompt, /greeted you/);
   assert.match(prompt, /do not tell them what you are doing until they ask/);
 });
 

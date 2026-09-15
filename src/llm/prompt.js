@@ -173,7 +173,16 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
-  if (trigger.opener) {
+  if (trigger.greeting) {
+    lines.push(
+      '',
+      'They greeted you and nothing more. Greet them back: "yo", "wsg", "hey", "ey", "sup". One word, occasionally two, and do not tell them what you are doing until they ask.',
+      // Reported: "yo" came back with "hbu" alone. The slang is right and
+      // nobody taught it — the problem is only that it skips the greeting, so
+      // the reply answers a question that was never asked. "yo hbu" is fine.
+      'A greeting can carry a question with it — "yo wsg", "yo hbu", "ey u good" — but the greeting comes first. Opening with only "hbu", "wbu", "nm" or "nmu" is the one thing that reads as a bot here, because nobody enters a conversation by answering.',
+    );
+  } else if (trigger.opener) {
     lines.push(
       '',
       'They have just called your name and said nothing else. Answer the way a player actually does: one or two characters. "?", "yh?", "what", "wha", "sup", "yh". Nothing longer, no explanation, do not tell them what you are doing until they ask.',
