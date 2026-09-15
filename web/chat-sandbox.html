@@ -1096,11 +1096,19 @@
         // and a burst of testing will hit it. Only a fault that will not fix
         // itself (bad key, retired model, no key configured) turns live off.
         if (isTransient(error.message)) {
-          logEntry("limit", upstreamName + " busy (" + shortenError(error.message) + ") — skipping this one");
-          setLive(true, "live · rate limited, retrying");
-          return { source: "gemini", message: null, reason: "rate limited" };
+          // Say the canned line rather than nothing. Silence is the one
+          // failure this whole page exists to avoid: standing there saying
+          // nothing while someone talks to you is exactly what a macro check
+          // is looking for, so a repeated line beats no line at all.
+          logEntry("limit", upstreamName + " busy — canned line this time: " + shortenError(error.message));
+          setLive(true, "live · one reply came from canned lines");
+          return {
+            source: "canned",
+            message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)),
+            reason: "upstream busy",
+          };
         }
-        logEntry("skip", upstreamName + " failed (" + shortenError(error.message) + ") — canned lines from here");
+        logEntry("skip", upstreamName + " failed — canned lines from here: " + shortenError(error.message));
         workerApiUrl = "";
         setLive(false, "offline · lines repeat");
         return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
@@ -1137,9 +1145,15 @@
       .test(String(message || ""));
   }
 
-  /** Quota errors run to several lines; the first is the useful one. */
+  /**
+   * Quota errors run to several lines; the first is the useful one. Cut long
+   * enough to keep the part that names the model, and drop a trailing
+   * fragment rather than ending mid-word.
+   */
   function shortenError(message) {
-    return String(message || "").split("\n")[0].slice(0, 90);
+    const line = String(message || "").split("\n")[0].trim();
+    if (line.length <= 140) return line;
+    return line.slice(0, 140).replace(/[\s(,;:-]+\S*$/, "") + "…";
   }
 
   function shoutFor(trigger) {
