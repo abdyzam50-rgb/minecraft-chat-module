@@ -255,6 +255,14 @@ test('a bare insult from someone next to us is still taken personally', () => {
   assert.equal(detectFromChat(store, config, chat('Dream', 'fuck you'), NOW)?.kind, 'hostile');
 });
 
+test('reads a hostile line followed by our name as one turn', () => {
+  const { config, store } = setup({ username: '3172' });
+  const first = store.addChat({ ...chat('Dream', 'yo fuck you'), ts: NOW - 1000 });
+  const second = store.addChat({ ...chat('Dream', '3172'), ts: NOW });
+  assert.equal(first.content, 'yo fuck you');
+  assert.equal(detectFromChat(store, config, second, NOW)?.kind, 'hostile');
+});
+
 test('stacked greetings are still just hello', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);

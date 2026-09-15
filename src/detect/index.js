@@ -307,8 +307,10 @@ export function detectHostile(store, config, message, ts = Date.now()) {
   if (!message.sender || message.system) return null;
   if (message.sender === config.username) return null;
   if (config.ignore.includes(message.sender)) return null;
-  if (!HOSTILE_NUDGE.test(message.content)) return null;
-  if (!mentions(message.content, config.username, config.aliases) &&
+  const burst = recentBurst(store, message, config, ts);
+  const content = burst.length ? burst.concat(message.content).join(' ') : message.content;
+  if (!HOSTILE_NUDGE.test(content)) return null;
+  if (!mentions(content, config.username, config.aliases) &&
       !store.isNearby(message.sender, config.detect.chatRadius, ts)) {
     return null;
   }
@@ -318,7 +320,7 @@ export function detectHostile(store, config, message, ts = Date.now()) {
     subject: message.sender,
     severity: 1,
     conversational: true,
-    evidence: `${message.sender} said "${message.content}" while standing near me.`,
+    evidence: `${message.sender} said "${content}" while standing near me.`,
     channel: message.channel === 'whisper' ? 'whisper' : message.channel,
   };
 }

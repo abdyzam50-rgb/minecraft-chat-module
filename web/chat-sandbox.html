@@ -1404,7 +1404,8 @@
     if (state.heard.length > 40) state.heard.shift();
     const nearby = player.distance <= DETECT.chatRadius;
     const nearForClaim = player.distance <= DETECT.spotClaimRadius;
-    const named = mentions(text, SELF);
+    const turn = burstText(player.name, text, ts);
+    const named = mentions(turn, SELF);
     const blockCount = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
 
     // They answered a question we asked. "no" closes the thread; "yeah" just
@@ -1422,7 +1423,7 @@
 
     // Most specific reading wins: "macro check, say something" matches the
     // accusation pattern too, but answering it on the ladder is the better reply.
-    if (MACRO_CHECK_TALK.test(text) && (nearby || named)) {
+    if (MACRO_CHECK_TALK.test(turn) && (nearby || named)) {
       state.checks[player.name] = (state.checks[player.name] || [])
         .filter(function (t) { return ts - t <= CHECK.windowMs; })
         .concat(ts);
@@ -1447,8 +1448,8 @@
       return logEntry("skip", shortName(player.name) + " has already been answered enough — ignoring further pestering");
     }
 
-    if (ACCUSATION.test(text)) {
-      const target = accusationTarget(text, named);
+    if (ACCUSATION.test(turn)) {
+      const target = accusationTarget(turn, named);
       if (target === "someone-else") {
         return logEntry("skip", "accusation was about someone else — ignored");
       } else {
@@ -1470,8 +1471,8 @@
 
     // A fair claim on the spot — they were here first, or they are mining this
     // vein. Give way; arguing with a reasonable person is what a bot would do.
-    if (SPOT_CLAIM.test(text) && (nearForClaim || named) &&
-        !(AGGRESSIVE.test(text) && !POLITE.test(text))) {
+    if (SPOT_CLAIM.test(turn) && (nearForClaim || named) &&
+        !(AGGRESSIVE.test(turn) && !POLITE.test(turn))) {
       return respond({
         kind: "spot_claim", subject: player.name, channel: channel, hint: "relocate", conversational: true,
         evidence: shortName(player.name) + ' said "' + escapeHtml(text) +
@@ -1479,7 +1480,7 @@
       });
     }
 
-    if (HOSTILE.test(text) && (named || nearby)) {
+    if (HOSTILE.test(turn) && (named || nearby)) {
       return respond({
         kind: "hostile", subject: player.name, channel, conversational: true,
         evidence: shortName(player.name) + " told me to move while standing next to me",
@@ -1509,7 +1510,6 @@
       // People type in bursts: "Yo how ur day?" then "3172?" a second later.
       // Only the second names us, and read alone it is a bare call-out, so the
       // question in the first line goes unanswered. Both lines are one turn.
-      const turn = burstText(player.name, text, ts);
       const remainder = stripName(turn);
       if (isLikelyGibberish(remainder)) {
         return logEntry("skip", "obvious keyboard mash — no reply");
