@@ -76,11 +76,6 @@ function modelsFor(env, provider) {
     .filter(Boolean);
 }
 
-/** True for the errors worth trying the next model over: busy, not broken. */
-function isBusy(status) {
-  return status === 429 || status === 502 || status === 503 || status === 504;
-}
-
 /**
  * A reply nobody is waiting for is worth nothing. Someone types in chat and
  * expects an answer in a second or two, so a slow model is a busy model: give
@@ -174,64 +169,55 @@ async function replyFromGemini(env, model, key, prompt) {
 
 async function replyFromOpenAI(env, models, key, prompt) {
   const baseUrl = (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const busy = [];
-
   const deadline = Date.now() + TOTAL_MS;
+  const failures = [];
 
   for (const model of models) {
-    if (Date.now() >= deadline && busy.length) {
-      throw new Error(`out of time after ${busy.join(', ')}`);
-    }
-    // Structured-output support varies wildly between models behind these
-    // gateways. A model that rejects the schema usually still honours
-    // json_object, so drop to that once rather than failing the reply.
-    let response;
+    if (Date.now() >= deadline) break;
     try {
-      response = await callOpenAI(baseUrl, model, key, prompt, true);
+      const reply = await tryModel(baseUrl, model, key, prompt);
+      // Which model actually answered, because with a fallback list the one in
+      // /health is only the first choice.
+      return { ...reply, model };
     } catch (error) {
-      // An aborted request looks exactly like a busy one from here.
-      if (model === models[models.length - 1]) throw new Error(`${model}: ${error.message}`);
-      console.warn(`${model} timed out, trying the next model`);
-      busy.push(`${model} timeout`);
-      continue;
+      // Only credentials mean every other model would fail the same way.
+      // Everything else is this model's problem — a saturated free pool, an
+      // upstream hiccup, an opaque 400 — so try the next one. Walking the
+      // list costs a second; giving up costs the reply.
+      if (error.fatal) throw error;
+      console.warn(`${model}: ${error.message}`);
+      failures.push(`${model} ${error.message}`);
     }
-    if (!response.ok && response.status === 400) {
-      const detail = await errorMessage(response);
-      if (/schema|response_format|json/i.test(detail)) {
-        console.warn(`${model} rejected json_schema, retrying as json_object`);
-        response = await callOpenAI(baseUrl, model, key, prompt, false);
-      } else {
-        throw new Error(`${model} 400: ${detail}`);
-      }
-    }
-
-    if (!response.ok) {
-      const detail = await errorMessage(response);
-      // A busy free pool is the next model's problem, not the caller's. A
-      // refusal — bad key, unknown model — is the same at every model, so
-      // surface it rather than working through the list to say so slower.
-      if (isBusy(response.status) && model !== models[models.length - 1]) {
-        console.warn(`${model} is busy (${response.status}), trying the next model`);
-        busy.push(`${model} ${response.status}`);
-        continue;
-      }
-      const tried = busy.length ? ` (after ${busy.join(', ')})` : '';
-      throw new Error(`${model} ${response.status}: ${detail}${tried}`);
-    }
-
-    const completion = await response.json();
-    const choice = completion.choices?.[0];
-    const text = choice?.message?.content || '';
-    if (!text) throw new Error(`${model} returned nothing (${choice?.finish_reason || 'no choice'})`);
-
-    const reply = parseReply(text.replace(THINK_BLOCK, '').trim());
-    if (!reply) throw new Error(`${model} returned unparseable JSON`);
-    // Which model actually answered, because with a fallback list the one in
-    // /health is only the first choice.
-    return { ...reply, model };
   }
 
-  throw new Error(`every model was busy (${busy.join(', ')})`);
+  throw new Error(`no model answered (${failures.join('; ') || 'out of time'})`);
+}
+
+async function tryModel(baseUrl, model, key, prompt) {
+  let response = await callOpenAI(baseUrl, model, key, prompt, true);
+
+  // Structured-output support varies wildly between models behind these
+  // gateways, and the 400 that says so is often no more specific than
+  // "Provider returned error". Retrying without the schema is cheap and is
+  // the commonest fix, so try it on any 400 rather than only a worded one.
+  if (!response.ok && response.status === 400) {
+    response = await callOpenAI(baseUrl, model, key, prompt, false);
+  }
+
+  if (!response.ok) {
+    const error = new Error(`${response.status}: ${await errorMessage(response)}`);
+    error.fatal = response.status === 401 || response.status === 403;
+    throw error;
+  }
+
+  const completion = await response.json();
+  const choice = completion.choices?.[0];
+  const text = choice?.message?.content || '';
+  if (!text) throw new Error(`returned nothing (${choice?.finish_reason || 'no choice'})`);
+
+  const reply = parseReply(text.replace(THINK_BLOCK, '').trim());
+  if (!reply) throw new Error('returned unparseable JSON');
+  return reply;
 }
 
 function callGemini(model, key, prompt, thinkingConfig) {
