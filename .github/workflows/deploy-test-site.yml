@@ -117,13 +117,23 @@ jobs:
           # keyConfigured only proves a secret exists. A key the upstream
           # rejects passed this check and shipped a site that could not answer
           # anything, so spend one real request proving it can.
+          #
+          # What counts as a pass is the distinction that matters: a reply, or
+          # an upstream that accepted our credentials and is merely busy. A
+          # 429 means the wiring is right and the free window is spent — and
+          # this probe is itself one of the requests that spends it. Only a
+          # refusal (bad key, retired model, wrong URL) is a broken deploy.
           reply="$(curl -sS -X POST "$WORKER_URL/api/reply" \
             -H 'content-type: application/json' \
             -d '{"prompt":"Reply as JSON with fields respond (boolean), message (string), reason (string). Set message to the single word ok."}' || true)"
           echo "reply=$reply"
           case "$reply" in
-            *'"message"'*) : ;;
-            *) echo "::error::The API is reachable but did not answer: $reply"; exit 1 ;;
+            *'"message"'*)
+              echo "The API answered." ;;
+            *429*|*[Qq]uota*|*rate\ limit*|*RESOURCE_EXHAUSTED*)
+              echo "::warning::Upstream is rate limited, so the reply path is wired but unproven: $reply" ;;
+            *)
+              echo "::error::The API is reachable but refused to answer: $reply"; exit 1 ;;
           esac
           echo "### Test site" >> "$GITHUB_STEP_SUMMARY"
           echo "$WORKER_URL/" >> "$GITHUB_STEP_SUMMARY"
