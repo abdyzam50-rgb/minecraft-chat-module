@@ -585,11 +585,13 @@ test('an actual question is not treated as a bare call-out', async () => {
   assert.doesNotMatch(capture.params.messages[0].content, /one or two characters/);
 });
 
-test('it is told to stop using their name once it has twice running', async () => {
+test('even on call-outs it is told to stop repeating their name', async () => {
+  // A call-out is the one place a name belongs — you are getting the attention
+  // of someone who is not listening. Three in a row still reads as a script,
+  // so the fatigue rule has to cover the case names survive.
   const prompts = [];
   let call = 0;
-  // Every reply name-drops them, which is the habit we want caught.
-  const lines = ['ghosting in mist dream', 'lost count dream, been ages', 'about 40m dream'];
+  const lines = ['dream move', 'dream your in my way', 'dream shift'];
   let clock = 1_700_000_000_000;
   const ai = createChatAI({
     username: '3172',
@@ -608,14 +610,24 @@ test('it is told to stop using their name once it has twice running', async () =
   });
 
   await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
-  for (const line of ['yo 3172 hows it going', 'how many hours you been at this', 'how many coins so far']) {
-    await ai.handle({ type: 'chat', raw: `[MVP+] xX_DreamSlayer_Xx: ${line}` });
-    clock += 6000;
+
+  // Three separate call-outs: block the pathfinder, clear, block again.
+  for (let round = 0; round < 3; round += 1) {
+    for (let i = 0; i < 4; i += 1) {
+      clock += 1000;
+      await ai.handle({
+        type: 'pathfinder',
+        state: 'blocked',
+        blockedBy: { name: 'xX_DreamSlayer_Xx', distance: 1.2 },
+      });
+    }
+    clock += 30_000;
+    await ai.handle({ type: 'pathfinder', state: 'running', blockedBy: null });
   }
 
+  assert.ok(prompts.length >= 3, `expected three call-outs, got ${prompts.length}`);
   assert.doesNotMatch(prompts[0], /starting to read as a script/);
-  assert.doesNotMatch(prompts[1], /starting to read as a script/);
-  assert.match(prompts[2], /Do not use it again/, 'after two name-drops in a row it is told to stop');
+  assert.match(prompts.at(-1), /Do not use it again/, 'after two name-drops in a row it is told to stop');
 });
 
 /** The reported transcript, verbatim. Every line of it must get an answer. */
@@ -790,7 +802,7 @@ test('a terse reply is cut down mechanically, name and all', async () => {
   assert.equal(said.at(-1).message, 'all g');
 });
 
-test('a normal reply is left alone by the terse rules', async () => {
+test('a normal reply keeps its length, and loses the name', async () => {
   const ai = createChatAI({
     username: '3172',
     client: mockClient({ respond: true, message: 'been grinding ghosts since about 4am dream', reason: '' }),
@@ -800,7 +812,9 @@ test('a normal reply is left alone by the terse rules', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
   await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172 how long you been at it' });
 
-  assert.equal(said[0].message, 'been grinding ghosts since about 4am dream');
+  // Full length: the terse rules do not apply to a real answer. But the name
+  // goes, because outside a call-out it is the clearest tell there is.
+  assert.equal(said[0].message, 'been grinding ghosts since about 4am');
 });
 
 test('the prompt carries the slang it needs to read and write', async () => {
@@ -1175,4 +1189,172 @@ test('"pretty good" and "not bad" read as closing an exchange, not opening one',
   }
   // Nor is something with actual content in it.
   assert.equal(isSmallTalk('you still grinding those ghosts'), false);
+});
+
+test('asked the same thing twice, it points back instead of going quiet', async () => {
+  // Reported from the sandbox: BlockBuddy asked "what you upto?" four times
+  // and got nothing each time, because every answer was a near-repeat of the
+  // last. Silence is the worst of the three options — it is exactly what a
+  // macro check is watching for.
+  const prompts = [];
+  let call = 0;
+  const client = {
+    messages: {
+      async create(params) {
+        prompts.push(params.messages[0].content);
+        call += 1;
+        // The second ask comes back with the same answer as the first, which
+        // is what makes the repeat guard fire. Only the retry, which is told
+        // it has already answered, says something different.
+        const message = call <= 2 ? 'just grinding ghosts' : 'just said';
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: JSON.stringify({ respond: true, message, reason: '' }) }],
+        };
+      },
+    },
+  };
+
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', now: () => clock, client });
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'BlockBuddy', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: what you upto 3172?' });
+  assert.deepEqual(said, ['just grinding ghosts']);
+
+  clock += 15_000;
+  await ai.handle({ type: 'chat', raw: '[VIP] BlockBuddy: 3172 what you upto?' });
+
+  assert.equal(said.length, 2, 'the second ask gets an answer, not silence');
+  assert.equal(said[1], 'just said');
+  assert.match(prompts.at(-1), /already answered this/i);
+  assert.match(prompts.at(-1), /just grinding ghosts/, 'and it is told what it said');
+});
+
+test('rudeness builds a mood, and the mood colours the reply', async () => {
+  const prompts = [];
+  const client = {
+    messages: {
+      async create(params) {
+        prompts.push(params.messages[0].content);
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: JSON.stringify({ respond: true, message: `line ${prompts.length}`, reason: '' }) }],
+        };
+      },
+    },
+  };
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', now: () => clock, client });
+  const moods = [];
+  ai.on('mood', (m) => moods.push(m.level));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+
+  // A calm session says nothing about mood at all.
+  await ai.handle({ type: 'chat', raw: '[VIP] Rude: yo 3172' });
+  assert.ok(!/patience|annoyed|had enough/i.test(prompts.at(-1)), 'a calm player needs no explaining');
+
+  // Grief accumulates even across messages that earn no reply.
+  for (const line of ['3172 ur trash', '3172 shut up', '3172 nobody asked', '3172 bozo']) {
+    clock += 20_000;
+    await ai.handle({ type: 'chat', raw: `[VIP] Rude: ${line}` });
+  }
+  assert.ok(moods.length > 0, 'the mood moved');
+  assert.ok(moods.at(-1) >= 2, `expected to be properly annoyed, got ${moods.at(-1)}`);
+  assert.match(prompts.at(-1), /annoyed|had enough|patient/i);
+});
+
+test('past the last rung it stops arguing and leaves', async () => {
+  const client = {
+    messages: {
+      async create() {
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: JSON.stringify({ respond: true, message: 'done w this lobby', reason: '' }) }],
+        };
+      },
+    },
+  };
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', now: () => clock, client });
+  const left = [];
+  ai.on('leave', (event) => left.push(event));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+  // Well past the opening minutes, so this is patience running out rather
+  // than a tantrum on the first insult.
+  clock += 10 * 60_000;
+
+  for (let i = 0; i < 9 && left.length === 0; i += 1) {
+    clock += 5_000;
+    await ai.handle({ type: 'chat', raw: `[VIP] Rude: 3172 ur trash stfu bozo ${i}` });
+  }
+
+  assert.equal(left.length, 1, 'it eventually walks');
+  const actions = ai.drain();
+  const leaving = actions.find((a) => a.type === 'leave');
+  assert.ok(leaving, 'the client is told to go');
+  assert.ok(actions.indexOf(leaving) > 0, 'after a parting line, not instead of one');
+  assert.ok(leaving.delayMs > 0);
+});
+
+test('it does not walk out in the first minutes of a session', async () => {
+  const client = {
+    messages: {
+      async create() {
+        return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ respond: true, message: 'k', reason: '' }) }] };
+      },
+    },
+  };
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', now: () => clock, client });
+  const left = [];
+  ai.on('leave', (event) => left.push(event));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Rude', distance: 3 }] });
+  for (let i = 0; i < 10; i += 1) {
+    clock += 2_000;
+    await ai.handle({ type: 'chat', raw: `[VIP] Rude: 3172 stfu ur trash bozo ${i}` });
+  }
+  assert.equal(left.length, 0, 'quitting instantly is a tantrum, not patience running out');
+});
+
+test('a name is for a call-out, not for every reply', async () => {
+  // Observed live: four consecutive replies to a rude player all opened with
+  // "dream". The no-name rule only covered mentions, and those were hostile
+  // triggers, so it never applied where it was most needed.
+  const prompts = [];
+  const client = {
+    messages: {
+      async create(params) {
+        prompts.push(params.messages[0].content);
+        return {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: JSON.stringify({ respond: true, message: `line ${prompts.length}`, reason: '' }) }],
+        };
+      },
+    },
+  };
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', now: () => clock, client });
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: 3172 ur trash shut up' });
+  assert.match(prompts.at(-1), /Do not use their name/i, 'being rude is still a conversation');
+
+  // The one place a name earns its keep: someone standing in the pathfinder
+  // who is not listening yet.
+  clock += 60_000;
+  for (let i = 0; i < 4; i += 1) {
+    clock += 1_000;
+    await ai.handle({
+      type: 'pathfinder',
+      state: 'blocked',
+      blockedBy: { name: 'xX_DreamSlayer_Xx', distance: 1.2 },
+    });
+  }
+  assert.ok(!/Do not use their name/i.test(prompts.at(-1)), 'a call-out needs the name');
 });

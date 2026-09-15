@@ -11,6 +11,7 @@ import { FallbackResponder } from './llm/fallback.js';
 import { detectFromChat, detectPathfinderBlock, detectMuted } from './detect/index.js';
 import { getPersona } from './persona/personas.js';
 import { shortName } from './chat/shortname.js';
+import { RUDE } from './detect/patterns.js';
 
 /**
  * The brain: feed it game events, it emits chat messages to send.
@@ -90,9 +91,79 @@ export class ChatAI extends EventEmitter {
     }
 
     const trigger = detectFromChat(this.store, this.config, message, ts);
-    if (!trigger) return null;
+
+    // Mood is tracked whether or not this message earns a reply. Being sworn
+    // at by someone you are ignoring still wears on you, and half the point is
+    // that it accumulates across a session.
+    this.noteMood(message, trigger, ts);
+
+    if (!trigger) {
+      // Even with nothing to say back, enough grief is enough.
+      this.maybeLeave(ts, 800);
+      return null;
+    }
     if (trigger.kind === 'accusation') this.store.recordAccusation(message.sender, ts);
-    return this.respond(trigger, ts);
+
+    const action = await this.respond(trigger, ts);
+    // respond() handles the case where it spoke. This covers the reply being
+    // suppressed — by the repeat guard, a cooldown, or the model staying
+    // quiet — which is common precisely when someone is spamming abuse.
+    if (!action) this.maybeLeave(ts, 800);
+    return action;
+  }
+
+  /**
+   * Add up what this message costs in patience.
+   *
+   * Rudeness counts most, a macro check counts because standing in someone's
+   * face to test them is rude in itself, and an accusation counts a little.
+   * Nothing here decides anything — it only moves the mood.
+   */
+  noteMood(message, trigger, ts) {
+    const steps = this.config.detect.annoyance;
+    let points = 0;
+    if (RUDE.test(message.content)) points += steps.rudeStep;
+    if (trigger?.kind === 'macro_check') points += steps.checkStep;
+    if (trigger?.kind === 'accusation') points += steps.accusationStep;
+    if (!points) return;
+
+    const before = this.store.annoyanceLevel(this.config, ts);
+    this.store.noteAnnoyance(points, this.config, ts);
+    const after = this.store.annoyanceLevel(this.config, ts);
+    if (after !== before) {
+      this.emit('mood', {
+        level: after,
+        score: this.store.annoyanceScore(this.config, ts),
+        because: message.sender,
+      });
+    }
+  }
+
+  /**
+   * The last rung of the mood is not a louder reply — it is leaving.
+   *
+   * Deliberately not tied to having just spoken. Someone spamming insults gets
+   * similar answers, so the repeat guard suppresses them, and gating the walk
+   * on a successful reply meant the bot could never leave in exactly the
+   * situation leaving is for.
+   */
+  maybeLeave(ts, delayMs) {
+    if (!this.store.hasHadEnough(this.config, ts)) return null;
+
+    const leaving = {
+      type: 'leave',
+      reason: 'had enough of this lobby',
+      score: this.store.annoyanceScore(this.config, ts),
+      /** After the parting line has been typed, when there was one. */
+      delayMs,
+      ts: this.now(),
+    };
+    // The mood resets with the lobby: the next one starts fresh, the way it
+    // would for someone who just wanted away from those particular players.
+    this.store.annoyance = { score: 0, ts };
+    this.outbox.push(leaving);
+    this.emit('leave', leaving);
+    return leaving;
   }
 
   async handlePathfinder(event, ts) {
@@ -144,7 +215,8 @@ export class ChatAI extends EventEmitter {
         }
       : {};
 
-    let decision = await this.think(trigger, ts, { avoid, nameFatigue });
+    const mood = this.store.annoyanceLevel(this.config, ts);
+    let decision = await this.think(trigger, ts, { avoid, nameFatigue, mood });
     if (!decision) return null;
 
     if (!decision.respond || !decision.message) {
@@ -161,7 +233,18 @@ export class ChatAI extends EventEmitter {
       short(trigger.subject),
     ].filter(Boolean);
 
-    let clean = sanitize(decision.message, this.config, { shout, speakers, ...terse });
+    // Asking the model to leave the name out works most of the time, which is
+    // not the same as working. Observed: told plainly not to, two replies in
+    // four still opened with "Dream". Outside a call-out the name is stripped
+    // rather than requested — a guarantee, not a preference.
+    const stripNames = trigger.kind === 'macro_check' ? [] : speakers.filter((n) => n !== this.config.username);
+
+    let clean = sanitize(decision.message, this.config, {
+      shout,
+      speakers,
+      stripNames,
+      ...terse,
+    });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
@@ -173,9 +256,18 @@ export class ChatAI extends EventEmitter {
     // the rejected line in front of it before giving up and saying nothing.
     if (!final.allowed && final.repeat && this.config.llm.retryOnRepeat && this.usingApi) {
       this.emit('skip', { trigger, reason: `${final.reason} — rewriting` });
-      const retry = await this.think(trigger, ts, { avoid, nameFatigue, rejected: clean.message });
+      // Saying it again is a tell, but so is going quiet when somebody asks
+      // you something twice — and silence is the one a macro check is looking
+      // for. Point back at the answer instead of hunting for a new wording.
+      const retry = await this.think(trigger, ts, {
+        avoid,
+        nameFatigue,
+        mood,
+        rejected: clean.message,
+        alreadyAnswered: final.repeat?.match ?? null,
+      });
       if (retry?.respond && retry.message) {
-        const retryClean = sanitize(retry.message, this.config, { shout, speakers, ...terse });
+        const retryClean = sanitize(retry.message, this.config, { shout, speakers, stripNames, ...terse });
         if (retryClean.ok) {
           const retryCheck = this.policy.check(trigger, retryClean.message);
           if (retryCheck.allowed) {
@@ -202,6 +294,7 @@ export class ChatAI extends EventEmitter {
       trigger: trigger.kind,
       subject: trigger.subject,
       anger: trigger.anger ?? null,
+      mood,
       /** Something the client should do as well as type, or null. */
       hint: trigger.hint ?? null,
       reason: decision.reason,
@@ -226,6 +319,8 @@ export class ChatAI extends EventEmitter {
     if (trigger.closes && trigger.subject) this.store.closeConversation(trigger.subject);
     this.outbox.push(action);
     this.emit('say', action);
+
+    this.maybeLeave(ts, action.delayMs + 1500);
     return action;
   }
 

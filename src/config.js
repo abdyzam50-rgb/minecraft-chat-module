@@ -163,6 +163,26 @@ export const DEFAULTS = {
      * mildly annoyed, twice you are fed up, three times and they are doing it
      * to wind you up.
      */
+    /**
+     * A mood, not a decision. Rudeness from anyone adds to it, it fades on its
+     * own, and it colours how every reply is written rather than triggering
+     * one. The last rung is leaving: a real person who has had enough stops
+     * arguing and changes lobby.
+     */
+    annoyance: {
+      /** Added per rude message, per macro check, per accusation. */
+      rudeStep: 2,
+      checkStep: 1,
+      accusationStep: 1,
+      /** Points shed per minute of nobody being unpleasant. */
+      decayPerMinute: 1,
+      /** Level boundaries: at or above each score, the mood changes. */
+      levels: [0, 3, 6, 9, 12],
+      /** At this score the player leaves. 0 disables it. */
+      leaveAt: 14,
+      /** Never leave in the first minutes of a session. */
+      minUptimeMs: 120000,
+    },
     macroCheck: {
       annoyedAt: 1,
       fedUpAt: 2,

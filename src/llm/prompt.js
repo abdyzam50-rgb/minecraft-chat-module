@@ -217,11 +217,6 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push(
       '',
       'This one is not testing you — they are just talking to you. Answer them properly, the way you would answer someone standing next to you at the same grind. Keep the attitude for people being deliberately annoying.',
-      // The cached rule above says to leave names out, and it keeps losing to
-      // the pull of the conversation: "tired ngl, Dream, hbu?". A rule in the
-      // per-message block outweighs one in the cached preamble, so it is
-      // repeated here where it applies.
-      `Do not use their name in this reply. They know you are talking to them — you are replying to them. A name belongs on a call-out across a busy chat, not in a back-and-forth, and "${subjectShort}" dropped into the middle of a sentence is the clearest tell that something automated typed it.`,
       'If they asked something, actually answer it before anything else. A one-word deflection like "what" or "yeah?" is never the answer to a real question.',
     );
   }
@@ -257,6 +252,37 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  // The mood, as a voice note rather than an instruction to be rude. Level 0
+  // says nothing at all — a calm player needs no explanation of being calm.
+  // A name is for getting the attention of someone who is not listening —
+  // the player standing in your pathfinder. In anything else they already
+  // know you are talking to them, and the name is the clearest tell that
+  // something automated typed the line. The cached preamble says this too and
+  // keeps losing to the pull of the conversation, so it is repeated here,
+  // where a per-message instruction outweighs a cached one.
+  if (trigger.kind !== 'macro_check' && subjectShort) {
+    lines.push(
+      '',
+      `Do not use their name in this reply. They know you are talking to them. "${subjectShort}" at the start of a line, or dropped into the middle of one, is what a script does.`,
+    );
+  }
+
+  if (options.mood > 0) {
+    lines.push('', MOOD_LINES[Math.min(options.mood, MOOD_LINES.length - 1)]);
+  }
+
+  if (options.alreadyAnswered) {
+    lines.push(
+      '',
+      // Reported: asked "what you upto?" four times and got silence, because
+      // every answer was a near-repeat of the one before. Silence is the worst
+      // of the three options here — it is what a macro looks like.
+      `You have already answered this. What you said was "${options.alreadyAnswered}".`,
+      'Do not say it again and do not find a new way to say the same thing. Point back at it, the way a person does when someone missed it: "just said", "read up", "said it above", "literally just answered that", "scroll up".',
+      'Two or three words. If this is the second or third time they have asked, a bit of irritation is fair — but do not insult them for it.',
+    );
+  }
+
   if (options.rejected) {
     lines.push(
       '',
@@ -285,3 +311,18 @@ export const RESPONSE_SCHEMA = {
   required: ['respond', 'message', 'reason'],
   additionalProperties: false,
 };
+
+/**
+ * How the player sounds as patience runs out.
+ *
+ * Written as a state of mind rather than a script, because a list of rude
+ * phrases produces a bot that swears on cue. The escalation people actually
+ * do is getting shorter and colder first, and only then loud.
+ */
+const MOOD_LINES = [
+  '',
+  'You have been getting grief for a while and it is starting to show. Shorter than usual, less patient, no warmth you do not have to give.',
+  'You have had enough of this lobby. Curt and cold. You are not here to be entertained by them, and you are not pretending otherwise — but you are not shouting either.',
+  'You are properly annoyed now. Snap back. Short, sharp, dismissive. You can be rude; you cannot be cruel, and you never tell anyone to hurt themselves.',
+  'You are done. This is the point where a real person stops arguing and starts thinking about changing lobby — you sound like someone about to walk, not someone looking for another round.',
+];

@@ -44,6 +44,9 @@ export class ContextStore {
 
     /** Last thing we said, so we can tell whether a reply is aimed at us. */
     this.lastOutgoing = null;
+    /** Mood, not a decision: {score, ts} decayed on read. See noteAnnoyance. */
+    this.annoyance = { score: 0, ts: 0 };
+    this.startedAt = this.now();
 
     /**
      * Who we are currently talking with.
@@ -245,5 +248,50 @@ export class ContextStore {
 
   recentChat(count = 10) {
     return this.chat.slice(-count);
+  }
+
+  /**
+   * Add to the mood, after shedding whatever has faded since last time.
+   *
+   * Decay happens on read and on write rather than on a timer, so a session
+   * that sits quiet for ten minutes comes back calm without anything having
+   * to run in the background.
+   */
+  noteAnnoyance(points, config, ts = this.now()) {
+    this.annoyance.score = this.annoyanceScore(config, ts) + points;
+    this.annoyance.ts = ts;
+    return this.annoyance.score;
+  }
+
+  /** The mood right now, with time already taken off it. */
+  annoyanceScore(config, ts = this.now()) {
+    const { decayPerMinute } = config.detect.annoyance;
+    if (!this.annoyance.ts) return this.annoyance.score;
+    const minutes = (ts - this.annoyance.ts) / 60000;
+    return Math.max(0, this.annoyance.score - minutes * decayPerMinute);
+  }
+
+  /**
+   * Which rung of the mood we are on: 0 is fine, the top is about to walk.
+   * Levels are thresholds, so tuning them does not touch any other code.
+   */
+  annoyanceLevel(config, ts = this.now()) {
+    const score = this.annoyanceScore(config, ts);
+    const { levels } = config.detect.annoyance;
+    let level = 0;
+    levels.forEach((threshold, index) => {
+      if (score >= threshold) level = index;
+    });
+    return level;
+  }
+
+  /** Has it gone past the point where a person would just change lobby? */
+  hasHadEnough(config, ts = this.now()) {
+    const { leaveAt, minUptimeMs } = config.detect.annoyance;
+    if (!leaveAt) return false;
+    // Not in the first minutes of a session: quitting instantly on one insult
+    // is not a person losing patience, it is a tantrum.
+    if (ts - this.startedAt < minUptimeMs) return false;
+    return this.annoyanceScore(config, ts) >= leaveAt;
   }
 }

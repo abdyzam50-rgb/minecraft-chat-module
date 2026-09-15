@@ -66,6 +66,30 @@ export const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|c
 /** Real aggression, as opposed to a blunt but fair request. */
 export const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
 
+/**
+ * Rudeness that is not quite an accusation and not quite a threat: insults,
+ * mockery, dismissal, telling you to shut up.
+ *
+ * Kept separate from AGGRESSIVE because this feeds a mood rather than a
+ * decision. One of these is water off a duck's back; the tenth in five minutes
+ * is what makes a real person snap.
+ */
+export const RUDE = new RegExp(
+  [
+    // Straight insults.
+    '\\b(?:idiot|clown|dumb(?:ass)?|stupid|moron|loser|trash|bum|bot|npc|virgin|weirdo|creep|freak|nerd|sweat|tryhard)\\b',
+    // Dismissal and mockery.
+    '\\bshut\\s?up\\b', '\\bcry\\b', '\\bcope\\b', '\\bmad\\b', '\\bseethe\\b', '\\bratio\\b',
+    '\\bnobody\\s?(?:asked|cares)\\b', '\\bwho\\s?asked\\b', '\\bdont\\s?care\\b',
+    '\\btouch\\s?grass\\b', '\\bget\\s?(?:a\\s?life|good|lost|out)\\b', '\\bgo\\s?away\\b',
+    '\\bur\\s?(?:bad|trash|mid|washed|dogshit)\\b', '\\byou\\s?(?:suck|stink)\\b',
+    '\\bL\\b', '\\bmid\\b', '\\bwashed\\b', '\\bbozo\\b', '\\bdweeb\\b',
+    // Swearing aimed at someone.
+    '\\bf+u+c+k+\\s?(?:u|you|off)\\b', '\\bstfu\\b', '\\bkys\\b', '\\bpiss\\s?off\\b',
+  ].join('|'),
+  'i',
+);
+
 /** "u", "you", "ur" — the accusation is pointed at whoever is being spoken to. */
 const SECOND_PERSON = /\b(?:u|you|ur|your|yours|urself|yourself|yall)\b/gi;
 

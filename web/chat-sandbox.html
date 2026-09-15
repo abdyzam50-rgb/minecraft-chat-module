@@ -258,6 +258,27 @@
 
   .meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .meter { display: flex; flex-direction: column; gap: 2px; }
+  .mood-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .mood-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: var(--good);
+    transition: width 0.4s ease, background 0.4s ease;
+  }
+  .mood-note {
+    margin: 10px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--ink-faint);
+  }
+
   .meter b {
     font-family: var(--font-code); font-size: 17px; font-weight: 500;
     font-variant-numeric: tabular-nums; color: var(--ink);
@@ -377,6 +398,17 @@
       <section class="card">
         <h2>Players nearby</h2>
         <div class="card-body roster" id="roster"></div>
+      </section>
+
+      <section class="card">
+        <h2>Patience</h2>
+        <div class="card-body">
+          <div class="meters">
+            <div class="meter" id="meterMood"><b>calm</b><span>mood</span></div>
+          </div>
+          <div class="mood-track" aria-hidden="true"><div class="mood-fill" id="moodFill"></div></div>
+          <p class="mood-note" id="moodNote">Rudeness adds up and fades on its own. Enough of it and they leave the lobby.</p>
+        </div>
       </section>
 
       <section class="card">
@@ -546,6 +578,13 @@
   const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
+  /**
+   * Rudeness that is not quite an accusation: insults, mockery, dismissal.
+   * Feeds the mood rather than a decision — one is nothing, the tenth in five
+   * minutes is what makes a real person snap.
+   */
+  const RUDE = /\b(?:idiot|clown|dumb(?:ass)?|stupid|moron|loser|trash|bum|bot|npc|weirdo|creep|freak|nerd|sweat|tryhard|bozo|dweeb)\b|\bshut\s?up\b|\bcry\b|\bcope\b|\bseethe\b|\bratio\b|\bnobody\s?(?:asked|cares)\b|\bwho\s?asked\b|\btouch\s?grass\b|\bget\s?(?:a\s?life|good|lost|out)\b|\bgo\s?away\b|\bur\s?(?:bad|trash|mid|washed)\b|\byou\s?(?:suck|stink)\b|\bf+u+c+k+\s?(?:u|you|off)\b|\bstfu\b|\bkys\b|\bpiss\s?off\b/i;
+
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
   const FILLER_WORDS = ["mb","my","bad","soz","sorry","apologies","all","g","good","np","no","worries","problem","fine","cool","nice","aight","ight","alr","alright","ok","okay","kk","k","gotcha","ic","i","see","fair","enough","true","word","bet","facts","lol","lmao","lmfao","haha","hahaha","hah","xd","rip","gg","ty","thanks","thx","tysm","cheers","ez","yh","yeah","ya","yep","yup","nah","oh","ah","ahh","damn","bro","man","mate","lad","dude","bruh","gang","twin","pretty","quite","very","real","great","decent","grand","same","not","bad","meh","tired","chillin","chilling","vibing","nm","nmu","im","am","doing","been","feeling","still"];
 
@@ -780,7 +819,7 @@
       });
       text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
       const words = text.split(/\s+/).filter(Boolean);
-      if (words.length > terse.maxWords) {
+      if (terse.maxWords && words.length > terse.maxWords) {
         const cut = words.slice(0, terse.maxWords).join(" ");
         // Cutting by word count lands mid-clause: "hey, doing good hbu"
         // becomes "hey, doing", which is worse than what it shortened.
@@ -817,6 +856,9 @@
     pathfinder: { state: "running", blockedBy: null },
     sent: [],          // {ts, message, subject, kind}
     heard: [],         // {ts, sender, content} — incoming lines, for burst reading
+    annoy: { score: 0, ts: 0 },  // mood: rudeness adds, time takes it away
+    startedAt: Date.now(),
+    left: false,       // walked out of the lobby; reset to carry on
     rotation: {},
     log: [],
   };
@@ -878,6 +920,87 @@
       '</span><span class="log-kind ' + entry.kind + '">' + entry.kind +
       '</span><span class="log-text">' + entry.text + "</span></div>"
     ).join("");
+  }
+
+  /* ---------- annoyance (src/context/store.js) ---------- */
+
+  /**
+   * How the player sounds as patience runs out — a state of mind, not a script
+   * of rude phrases, which would just produce a bot that swears on cue. The
+   * escalation people actually do is getting shorter and colder first.
+   */
+  const MOOD_LINES = [
+    "",
+    "You have been getting grief for a while and it is starting to show. Shorter than usual, less patient, no warmth you do not have to give.",
+    "You have had enough of this lobby. Curt and cold. You are not here to be entertained by them, and you are not pretending otherwise — but you are not shouting either.",
+    "You are properly annoyed now. Snap back. Short, sharp, dismissive. You can be rude; you cannot be cruel, and you never tell anyone to hurt themselves.",
+    "You are done. This is the point where a real person stops arguing and starts thinking about changing lobby — you sound like someone about to walk, not someone looking for another round.",
+  ];
+
+  const ANNOY = { rudeStep: 2, checkStep: 1, accusationStep: 1, decayPerMinute: 1, levels: [0, 3, 6, 9, 12], leaveAt: 14 };
+
+  /** Mood with the time already taken off it. */
+  function moodScore(ts) {
+    const at = ts || Date.now();
+    if (!state.annoy.ts) return state.annoy.score;
+    const minutes = (at - state.annoy.ts) / 60000;
+    return Math.max(0, state.annoy.score - minutes * ANNOY.decayPerMinute);
+  }
+
+  function moodLevel(ts) {
+    const score = moodScore(ts);
+    let level = 0;
+    ANNOY.levels.forEach(function (threshold, index) { if (score >= threshold) level = index; });
+    return level;
+  }
+
+  function noteMood(points, ts) {
+    if (!points) return;
+    state.annoy.score = moodScore(ts) + points;
+    state.annoy.ts = ts || Date.now();
+    renderMood();
+  }
+
+  const MOOD_NAMES = ["calm", "short", "cold", "annoyed", "done"];
+
+  /**
+   * Past the last rung a real person stops arguing and changes lobby.
+   *
+   * Not tied to having just replied: abuse gets similar answers, the repeat
+   * guard suppresses them, and gating the walk on a successful reply would
+   * mean never leaving in the one situation leaving is for.
+   */
+  function maybeLeave(ts) {
+    const at = ts || Date.now();
+    if (state.left) return false;
+    if (!ANNOY.leaveAt || moodScore(at) < ANNOY.leaveAt) return false;
+    // Not in the opening minutes: quitting on one insult is a tantrum, not
+    // patience running out.
+    if (at - state.startedAt < 120000) return false;
+
+    state.left = true;
+    logEntry("skip", "had enough — left the lobby");
+    sayAsSelf("/lobby", state.channel);
+    setLive(liveReady, "left the lobby · reset to carry on");
+    // The mood resets with the lobby, the way it would for someone who just
+    // wanted away from those particular players.
+    state.annoy = { score: 0, ts: at };
+    renderMood(at);
+    return true;
+  }
+
+  /** Draw the mood. The point of a meter is watching it climb. */
+  function renderMood(ts) {
+    const score = moodScore(ts);
+    const level = moodLevel(ts);
+    const label = el("meterMood");
+    const fill = el("moodFill");
+    if (!label || !fill) return;
+
+    label.querySelector("b").textContent = MOOD_NAMES[Math.min(level, MOOD_NAMES.length - 1)];
+    const pct = Math.max(0, Math.min(100, (score / ANNOY.leaveAt) * 100));
+    fill.style.width = pct.toFixed(0) + "%";
+    fill.style.background = level >= 3 ? "var(--stop)" : level >= 1 ? "var(--warn)" : "var(--good)";
   }
 
   /* ---------- rate limiter (src/chat/policy.js) ---------- */
@@ -1057,7 +1180,7 @@
   // <<< generated
 
   /** Everything the model needs to write one line, in one prompt. */
-  function buildPrompt(trigger, avoid, rejected) {
+  function buildPrompt(trigger, avoid, rejected, alreadyAnswered) {
     const persona = { chill: "calm and friendly, never insults, never swears",
       snarky: "dry, blunt, dismissive, trash talk is fine but no swearing",
       unfiltered: "aggressive and profane, zero patience" }[state.persona];
@@ -1130,13 +1253,24 @@
         ? 'They have a fair claim on this spot and as far as you know they are right. Give way: acknowledge it and say you will move. Do not argue or justify yourself — two or three words is plenty. "mb ill move" is one way to say that, not the only way, and you have said it before. Find another.'
         : "",
       (trigger.kind === "mention" || trigger.kind === "whisper")
-        ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question. Do not use their name in this reply: they know you are talking to them, and a name dropped into the middle of a sentence is the clearest tell that something automated typed it. Names are for calling someone out across a busy chat, not for a back-and-forth.'
+        ? 'This one is not testing you — they are just talking to you. Answer them properly. Asked what you are doing? Say what you are doing. A one-word deflection like "what" is never the answer to a real question.'
         : "",
       trigger.subject ? ("Reply to " + trigger.subject + '. Call them "' + shortName(trigger.subject) + '".') : "",
       "",
       avoid.length ? "You have already said these — do not reuse or reword any of them:" : "",
       avoid.map((line) => '  "' + line + '"').join("\n"),
-      rejected ? ('You just tried "' + rejected + '" and it was too close to one of those. Take a different angle, not a synonym swap.') : "",
+      alreadyAnswered
+        ? 'You have already answered this. What you said was "' + alreadyAnswered + '". Do not say it again and do not find a new way to say the same thing — point back at it, the way a person does when someone missed it: "just said", "read up", "said it above", "literally just answered that". Two or three words. If they have asked more than once, a bit of irritation is fair.'
+        : "",
+      rejected && !alreadyAnswered ? ('You just tried "' + rejected + '" and it was too close to one of those. Take a different angle, not a synonym swap.') : "",
+      // A name is for getting the attention of someone who is not listening —
+      // the player in your pathfinder. Anywhere else they already know you are
+      // talking to them, and the name is what a script does. Observed: four
+      // replies in a row to a rude player all opened with "dream".
+      trigger.kind !== "macro_check" && trigger.subject
+        ? 'Do not use their name in this reply. They know you are talking to them. "' + shortName(trigger.subject) + '" at the start of a line, or dropped into the middle of one, is what a script does.'
+        : "",
+      MOOD_LINES[Math.min(moodLevel(), MOOD_LINES.length - 1)],
       "",
       "Vary how you open and how long the line is. No catchphrases — if it feels like something you would say again next time, write something else.",
       'Reply with only JSON: {"respond": true, "message": "the line", "reason": "why, briefly"}',
@@ -1150,13 +1284,13 @@
       .map((n) => n.textContent.trim());
   }
 
-  async function writeLine(trigger, avoid, rejected) {
+  async function writeLine(trigger, avoid, rejected, alreadyAnswered) {
     if (workerApiUrl) {
       try {
         const response = await fetch(workerApiUrl + "/api/reply", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prompt: buildPrompt(trigger, avoid, rejected) }),
+          body: JSON.stringify({ prompt: buildPrompt(trigger, avoid, rejected, alreadyAnswered) }),
         });
         const reply = await response.json();
         if (!response.ok) throw new Error(reply.error || "Worker request failed");
@@ -1198,7 +1332,7 @@
     }
     if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)) };
     try {
-      const reply = await sampleFn.json(buildPrompt(trigger, avoid, rejected), {
+      const reply = await sampleFn.json(buildPrompt(trigger, avoid, rejected, alreadyAnswered), {
         modelTier: "quick",
         cache: false, // caching would replay the same line — the whole point is that it never does
       });
@@ -1283,8 +1417,16 @@
   }
 
   function terseFor(trigger) {
-    if (!trigger.opener && !trigger.greeting && !trigger.smalltalk && !trigger.uncertain && !trigger.closes) return null;
-    return { maxWords: 2, stripNames: [trigger.subject, shortName(trigger.subject || "")] };
+    const names = [trigger.subject, shortName(trigger.subject || "")].filter(Boolean);
+    // Asking the model to leave the name out works most of the time, which is
+    // not the same as working — two replies in four still opened with "Dream"
+    // after being told plainly not to. Outside a call-out it is stripped.
+    const stripNames = trigger.kind === "macro_check" ? [] : names;
+
+    if (!trigger.opener && !trigger.greeting && !trigger.smalltalk && !trigger.uncertain && !trigger.closes) {
+      return stripNames.length ? { maxWords: 0, stripNames: stripNames } : null;
+    }
+    return { maxWords: 2, stripNames: names };
   }
 
   /* ---------- the pipeline ---------- */
@@ -1303,6 +1445,11 @@
   }
 
   async function respond(trigger) {
+    // Mood, before anything else: a macro check and an accusation both cost
+    // patience, and standing in someone's face to test them is rude in itself.
+    if (trigger.kind === "macro_check") noteMood(ANNOY.checkStep);
+    else if (trigger.kind === "accusation") noteMood(ANNOY.accusationStep);
+
     // They started a conversation by speaking to us, whether or not we manage
     // to answer. Opening it only on a successful send meant one dropped reply
     // — a rate limit, a timeout — made every follow-up that did not repeat our
@@ -1333,7 +1480,9 @@
       if (repeat.repeat && sampleFn) {
         logEntry("skip", 'too close to "' + escapeHtml(repeat.match) + '" (' +
           repeat.score.toFixed(2) + ") — rewriting");
-        const retry = await writeLine(trigger, avoid, attempt.message);
+        // Point back at the answer rather than hunting for a new wording:
+        // going quiet when someone asks twice is what a macro looks like.
+        const retry = await writeLine(trigger, avoid, attempt.message, repeat.match);
         if (retry.message && !findRepeat(retry.message, avoid, [trigger.subject]).repeat) {
           attempt = retry;
           repeat = { repeat: false };
@@ -1383,6 +1532,11 @@
     const ts = Date.now();
     state.heard.push({ ts: ts, sender: player.name, content: text });
     if (state.heard.length > 40) state.heard.shift();
+
+    // Mood moves whether or not this earns a reply: being sworn at by someone
+    // you are ignoring still wears on you.
+    noteMood(RUDE.test(text) ? ANNOY.rudeStep : 0, ts);
+    if (maybeLeave(ts)) return;
     const nearby = player.distance <= DETECT.chatRadius;
     const nearForClaim = player.distance <= DETECT.spotClaimRadius;
     const named = mentions(text, SELF);
@@ -1719,6 +1873,8 @@
     state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {};
     state.log = []; state.fuses = {}; state.anger = {}; state.convo = {}; state.checks = {};
     state.askedWho = {}; state.heard = [];
+    state.annoy = { score: 0, ts: 0 }; state.left = false; state.startedAt = Date.now();
+    renderMood();
     state.pathfinder = { state: "running", blockedBy: null };
     chatLog.innerHTML = "";
     boot();
