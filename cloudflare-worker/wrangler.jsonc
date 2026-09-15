@@ -11,15 +11,19 @@
   // vendor, so this points at OpenRouter with the gateway key secret.
   // Set it to "gemini" to fall back to GEMINI_MODEL and GEMINI_API_KEY.
   //
-  // Free models here are capped at 20 requests a minute and 50 a day, or
-  // 1000 a day once the account has ever bought $10 of credits — and the
-  // shared free pools return 429 "Provider returned error" whenever they are
-  // saturated, which is often. OPENAI_MODEL is therefore a list: the first
-  // model that is not busy answers. Order it by how well each one writes a
-  // two-word chat reply, not by size.
+  // On "gemini" because OpenRouter's free tier could not serve this at all:
+  // every model in the list below failed together, repeatedly — two 429
+  // "Provider returned error", two that never answered inside nine seconds,
+  // one opaque 400. Free pools are shared, and a page waiting on a reply
+  // cannot wait on capacity nobody guarantees.
+  //
+  // The path itself is proven: the key authenticates and the walk behaves.
+  // With credits on the account (which also lifts the free cap from 50 to
+  // 1000 requests a day) or one cheap paid model in the list, "openai" is a
+  // working configuration. OPENAI_MODEL is a list, tried in order.
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
-    "LLM_PROVIDER": "openai",
+    "LLM_PROVIDER": "gemini",
     "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
     "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free, google/gemma-4-31b-it:free, nex-agi/nex-n2.5-mini:free, inclusionai/ling-3.0-flash-vl:free, liquid/lfm-2.5-2.6b:free"
   }
