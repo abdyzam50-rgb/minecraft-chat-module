@@ -168,6 +168,22 @@ this build and every reply 404'd until it changed. The Worker passes Gemini's ow
 error text through for exactly that reason — the message named both the problem
 and the replacement. Change it in one place, `cloudflare-worker/wrangler.jsonc`.
 
+**The free tier is tight.** `gemini-3.6-flash` on the free tier allows about 20
+`generateContent` requests per window, which a burst of testing exhausts in
+under a minute — and every reply the bot writes is one request, plus a second
+whenever the repeat guard rewrites a line. Symptoms:
+
+```
+Gemini 429: You exceeded your current quota ... limit: 20,
+model: gemini-3.6-flash. Please retry in 47s.
+```
+
+The page treats that as transient: it logs "Gemini busy", skips that one reply
+and stays live, rather than falling back to canned lines for the session. But
+for anything sustained — and certainly in-game — you want billing enabled on the
+Google Cloud project, or a model with a larger free allowance. That is a real
+cost decision, not something to enable without meaning to.
+
 The Worker URL is public by design, so keep this for testing unless you put
 Cloudflare Access in front of it.
 
