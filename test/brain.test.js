@@ -1025,3 +1025,65 @@ test('a compliment is not confused with an accusation or a check', async () => {
   assert.equal(said[0].trigger, 'mention');
   assert.match(capture.params.messages[0].content, /That is a compliment/);
 });
+
+test('a dropped reply does not kill the thread', async () => {
+  // The reported failure: a rate limit ate the first reply, so no conversation
+  // was ever opened, so every follow-up that did not repeat our name read as
+  // "nothing in that was aimed at me" and the bot went dead.
+  let clock = 1_700_000_000_000;
+  let calls = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          calls += 1;
+          if (calls === 1) throw new Error('Gemini 429: quota exceeded');
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify({ respond: true, message: `answer ${calls} about ghosts`, reason: '' }) }],
+          };
+        },
+      },
+    },
+  });
+
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+  ai.on('error', () => {});
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 1.8 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172' });   // dropped
+  clock += 9000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: yo' });     // must land
+  assert.equal(said.length, 1, 'the follow-up has to be answered');
+});
+
+test('the conversation opens even when we choose to stay quiet', async () => {
+  let clock = 1_700_000_000_000;
+  let calls = 0;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          calls += 1;
+          const reply = calls === 1
+            ? { respond: false, message: '', reason: 'not worth answering' }
+            : { respond: true, message: 'grinding ghosts still', reason: '' };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }] };
+        },
+      },
+    },
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 1.8 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 you there' });
+  clock += 9000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: how long you been at it' });
+  assert.equal(said.length, 1, 'the unnamed follow-up still counts as ours');
+});

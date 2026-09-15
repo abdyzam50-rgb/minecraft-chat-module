@@ -268,7 +268,18 @@ export function detectMention(store, config, message, ts = Date.now()) {
     store.inConversation(message.sender, config.limits.conversation.windowMs, ts) &&
     store.isNearby(message.sender, config.detect.chatRadius, ts);
 
-  if (!named && !continuing && !(isWhisper && config.detect.mention.answerWhispers)) return null;
+  // Someone at arm's length saying nothing but hello is talking to us, name or
+  // not — and this is what keeps a thread alive when a reply got dropped and
+  // no conversation was ever opened.
+  const greetingUpClose =
+    !named &&
+    isGreetingOnly(message.content) &&
+    store.isNearby(message.sender, config.detect.mention.greetingRadius, ts);
+
+  if (!named && !continuing && !greetingUpClose &&
+      !(isWhisper && config.detect.mention.answerWhispers)) {
+    return null;
+  }
 
   // Strip our name out and see whether anything was actually said.
   const remainder = [config.username, shortName(config.username), ...config.aliases]

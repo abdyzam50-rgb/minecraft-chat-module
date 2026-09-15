@@ -335,3 +335,27 @@ test('standing in the path still uses the randomised fuse', () => {
   }
   assert.deepEqual(anger, [1, 2, 3], 'one message per rung, spread over more blocks');
 });
+
+test('a bare greeting from arm\'s length is aimed at us, name or not', () => {
+  const { config, store } = setup({ username: '3172' });
+  for (const [distance, expected] of [[1.8, true], [5, true], [9, false], [20, false]]) {
+    const fresh = setup({ username: '3172' });
+    fresh.store.updateNearby([{ name: 'Dream', distance }], NOW);
+    const trigger = detectFromChat(fresh.store, fresh.config, chat('Dream', 'yo'), NOW);
+    assert.equal(Boolean(trigger), expected, `"yo" at ${distance}m`);
+  }
+  assert.ok(store);
+});
+
+test('a greeting up close is still just a greeting', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 2 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'hello?'), NOW).opener, true);
+});
+
+test('a real sentence from someone close still needs our name', () => {
+  // Otherwise we would answer every conversation happening next to us.
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 2 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'anyone selling sorrow'), NOW), null);
+});

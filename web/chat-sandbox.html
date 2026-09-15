@@ -557,6 +557,10 @@
 
   const GREETING_WORD = /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
 
+  function stripName(text) {
+    return String(text || "").replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
+  }
+
   /** People stack greetings — "yo wsg", "hey yo" — and it is all still hello. */
   function isGreetingOnly(text) {
     const words = String(text || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
@@ -601,6 +605,7 @@
   const DETECT = {
     threshold: 3, windowMs: 45000, radius: 4, patience: [4, 7], rage: [2, 4],
     chatRadius: 12,      // close enough to plausibly be talking to us
+    greetingRadius: 5,   // close enough that a bare "yo" is meant for us
     spotClaimRadius: 20, // a spot claim reaches further
   };
   const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 12, maxArgumentTurns: 3 };
@@ -1071,6 +1076,15 @@
   }
 
   async function respond(trigger) {
+    // They started a conversation by speaking to us, whether or not we manage
+    // to answer. Opening it only on a successful send meant one dropped reply
+    // — a rate limit, a timeout — made every follow-up that did not repeat our
+    // name read as "nothing aimed at me", and the page went dead.
+    if (trigger.conversational && trigger.subject) {
+      const open = state.convo[trigger.subject] || { turns: 0 };
+      state.convo[trigger.subject] = { lastTurn: Date.now(), turns: open.turns + 1 };
+    }
+
     logEntry("trigger", "<em>" + trigger.kind +
       (trigger.anger ? " · anger " + trigger.anger : "") + "</em> — " + trigger.evidence);
 
@@ -1109,10 +1123,7 @@
       if (trigger.anger && trigger.subject) {
         state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
       }
-      if (trigger.conversational && trigger.subject) {
-        const open = state.convo[trigger.subject] || { turns: 0 };
-        state.convo[trigger.subject] = { lastTurn: Date.now(), turns: open.turns + 1 };
-      }
+
 
       // Think for a beat, then type at a human rate.
       const delay = Math.min(7000, 400 + Math.random() * 1000 + attempt.message.length * (45 + Math.random() * 45));
@@ -1211,10 +1222,15 @@
     // exchange is live, their next line is for us whether it names us or not.
     const open = state.convo[player.name];
     const continuing = !named && open && (ts - open.lastTurn) <= CONVO.windowMs && nearby;
-    if (named || continuing) {
+    // And someone at arm's length saying nothing but hello is talking to us,
+    // name or not. Ignoring "yo" from a player stood next to you is the least
+    // human thing this can do.
+    const greetingUpClose = !named && isGreetingOnly(stripName(text)) &&
+      player.distance <= DETECT.greetingRadius;
+    if (named || continuing || greetingUpClose) {
       // Strip our name and see whether anything was actually said. "yo 3172"
       // wants "?" back, not a sentence about ghost drops.
-      const remainder = text.replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
+      const remainder = stripName(text);
       const opener = isGreetingOnly(remainder);
       const smalltalk = !opener && isSmallTalk(remainder);
       const compliment = !opener && !smalltalk && isCompliment(text, named);

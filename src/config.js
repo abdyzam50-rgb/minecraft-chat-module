@@ -180,6 +180,13 @@ export const DEFAULTS = {
     },
     mention: {
       enabled: true,
+      /**
+       * A bare greeting from someone this close counts as addressed to us even
+       * without our name in it. At arm's length in a public area they are
+       * almost certainly talking to you, and ignoring "yo" from someone stood
+       * next to you is the least human thing the bot can do.
+       */
+      greetingRadius: 5,
       /** Answer whispers even when they don't include a question. */
       answerWhispers: true,
     },

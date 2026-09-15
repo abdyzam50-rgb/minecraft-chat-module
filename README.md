@@ -503,11 +503,24 @@ never answering.
 
 Two things fix that.
 
+**A greeting from arm's length is for you.** Someone stood within
+`detect.mention.greetingRadius` (5m) saying nothing but "yo" or "hello?" gets
+answered without needing your name — at that distance in a public area they are
+talking to you, and ignoring it is the least human thing the bot can do. A full
+sentence from the same person still needs your name, otherwise you'd answer
+every conversation happening next to you.
+
 **A line doesn't have to name you to be for you.** Nobody keeps saying your
 name once you're already talking. Once the bot has answered someone, their next
 messages count as addressed to it — as long as they're still nearby and inside
 `limits.conversation.windowMs` (2 minutes). So "oh nice how long you been
 grinding" gets an answer, where before it matched nothing at all.
+
+**A dropped reply doesn't end the thread.** The conversation opens the moment
+someone speaks to you, not when a reply successfully sends. That distinction
+cost a whole exchange once: a rate limit ate the first answer, so no
+conversation was ever opened, so every follow-up that didn't repeat the name
+read as "nothing in that was aimed at me" and the bot went silent for good.
 
 **A reply to someone gets conversation rules, not nag rules.** When the trigger
 came from something they said, the per-player and per-kind cooldowns don't

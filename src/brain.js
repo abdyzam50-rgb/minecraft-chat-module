@@ -119,6 +119,14 @@ export class ChatAI extends EventEmitter {
   async respond(trigger, ts = this.now()) {
     this.emit('trigger', { trigger });
 
+    // They have started a conversation by speaking to us, whether or not we
+    // end up answering. Opening it only on a successful send meant one dropped
+    // reply — a rate limit, a timeout — made every follow-up that did not
+    // repeat our name read as "not aimed at me", and the bot went dead.
+    if (trigger.conversational && trigger.subject) {
+      this.store.openConversation(trigger.subject, ts);
+    }
+
     const gate = this.policy.check(trigger);
     if (!gate.allowed) {
       this.emit('skip', { trigger, reason: gate.reason });
@@ -202,7 +210,6 @@ export class ChatAI extends EventEmitter {
     this.policy.record(trigger, clean.message);
     this.store.recordOutgoing(clean.message);
     if (trigger.anger && trigger.subject) this.store.noteAnger(trigger.subject, trigger.anger);
-    if (trigger.conversational && trigger.subject) this.store.openConversation(trigger.subject);
     this.outbox.push(action);
     this.emit('say', action);
     return action;
