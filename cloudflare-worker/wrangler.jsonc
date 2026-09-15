@@ -7,20 +7,13 @@
   // API share one origin. Requests that do not match a file fall through to
   // src/index.js, which is what serves /api/reply and /health.
   "assets": { "directory": "./public" },
-  // LLM_PROVIDER picks the upstream: "openai" is the wire format, not the
-  // vendor, so this points at OpenRouter with the gateway key secret.
-  // Set it to "gemini" to fall back to GEMINI_MODEL and GEMINI_API_KEY.
+  // LLM_PROVIDER names what to try FIRST, not the only thing to try. Whatever
+  // else has a key is tried after it, because a quota is a property of one
+  // account on one day, not of the request: a free Gemini key stops answering
+  // after twenty, and OpenRouter's free pools are saturated as often as not.
+  // Neither is dependable alone; together they usually are.
   //
-  // On "gemini" because OpenRouter's free tier could not serve this at all:
-  // every model in the list below failed together, repeatedly — two 429
-  // "Provider returned error", two that never answered inside nine seconds,
-  // one opaque 400. Free pools are shared, and a page waiting on a reply
-  // cannot wait on capacity nobody guarantees.
-  //
-  // The path itself is proven: the key authenticates and the walk behaves.
-  // With credits on the account (which also lifts the free cap from 50 to
-  // 1000 requests a day) or one cheap paid model in the list, "openai" is a
-  // working configuration. OPENAI_MODEL is a list, tried in order.
+  // OPENAI_MODEL is a list, tried in order.
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
     "LLM_PROVIDER": "gemini",

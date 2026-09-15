@@ -58,8 +58,25 @@ function pickProvider(env) {
   return 'gemini';
 }
 
-function keyFor(env, provider) {
-  return provider === 'openai' ? gatewayKey(env) : env.GEMINI_API_KEY;
+/**
+ * Everything worth trying, in order, across both providers.
+ *
+ * A quota is not a property of the request — it is a property of one account
+ * on one day. Falling back only between models of the same provider leaves the
+ * page dead the moment that provider says no, which is exactly what a free
+ * Gemini key does after twenty requests. LLM_PROVIDER picks what goes first;
+ * whatever else has a key goes after it.
+ */
+function attemptsFor(env) {
+  const preferred = pickProvider(env);
+  const gemini = env.GEMINI_API_KEY
+    ? [{ provider: 'gemini', model: env.GEMINI_MODEL || 'gemini-3.6-flash', key: env.GEMINI_API_KEY }]
+    : [];
+  const key = gatewayKey(env);
+  const openai = key
+    ? modelsFor(env, 'openai').map((model) => ({ provider: 'openai', model, key }))
+    : [];
+  return preferred === 'openai' ? [...openai, ...gemini] : [...gemini, ...openai];
 }
 
 /**
@@ -92,15 +109,20 @@ export default {
     const headers = corsHeaders(origin, env.ALLOWED_ORIGIN);
     const url = new URL(request.url);
     const provider = pickProvider(env);
-    const key = keyFor(env, provider);
-    const models = modelsFor(env, provider);
+    const attempts = attemptsFor(env);
 
     if (request.method === 'OPTIONS') return new Response(null, { headers });
     if (request.method === 'GET' && url.pathname === '/health') {
-      // The model and provider are in here because the commonest failure is a
-      // deploy pointing at something other than what you think it is.
+      // The chain is in here because the commonest failure is a deploy
+      // pointing at something other than what you think it is.
       return json(
-        { ok: true, keyConfigured: Boolean(key), provider, model: models[0], models },
+        {
+          ok: true,
+          keyConfigured: attempts.length > 0,
+          provider,
+          model: attempts[0]?.model ?? null,
+          chain: attempts.map((attempt) => `${attempt.provider}:${attempt.model}`),
+        },
         200,
         headers,
       );
@@ -108,9 +130,8 @@ export default {
     if (request.method !== 'POST' || url.pathname !== '/api/reply') {
       return json({ error: 'not found' }, 404, headers);
     }
-    if (!key) {
-      const name = provider === 'openai' ? 'OPENROUTER_API_KEY' : 'GEMINI_API_KEY';
-      return json({ error: `server is missing ${name}` }, 500, headers);
+    if (!attempts.length) {
+      return json({ error: 'server has no GEMINI_API_KEY or OPENROUTER_API_KEY' }, 500, headers);
     }
 
     let body;
@@ -125,9 +146,7 @@ export default {
     }
 
     try {
-      const reply = provider === 'openai'
-        ? await replyFromOpenAI(env, models, key, prompt)
-        : await replyFromGemini(env, models[0], key, prompt);
+      const reply = await replyFromAny(env, attempts, prompt);
       return json(reply, 200, headers);
     } catch (error) {
       // The upstream's own message names the real problem — a retired model, a
@@ -138,6 +157,46 @@ export default {
     }
   },
 };
+
+/**
+ * Try each attempt until one answers. Everything short of an answer is this
+ * attempt's problem — a spent quota, a saturated free pool, a slow model, an
+ * opaque 400 — and the next one is a second away. Only a refused key skips
+ * the rest of that provider, since it would be refused identically.
+ */
+async function replyFromAny(env, attempts, prompt) {
+  const deadline = Date.now() + TOTAL_MS;
+  const failures = [];
+  const refused = new Set();
+
+  for (const attempt of attempts) {
+    if (Date.now() >= deadline) break;
+    if (refused.has(attempt.provider)) continue;
+    try {
+      const reply = attempt.provider === 'gemini'
+        ? await replyFromGemini(env, attempt.model, attempt.key, prompt)
+        : await tryModel(openaiBaseUrl(env), attempt.model, attempt.key, prompt);
+      // Which one actually answered: with a chain, /health only names the first.
+      return { ...reply, model: attempt.model, provider: attempt.provider };
+    } catch (error) {
+      if (error.fatal) refused.add(attempt.provider);
+      console.warn(`${attempt.provider}:${attempt.model} ${error.message}`);
+      failures.push(`${attempt.model} ${error.message}`);
+    }
+  }
+
+  throw new Error(`nothing answered (${failures.join('; ') || 'out of time'})`);
+}
+
+function geminiError(status, detail) {
+  const error = new Error(`${status}: ${detail}`);
+  error.fatal = status === 401 || status === 403;
+  return error;
+}
+
+function openaiBaseUrl(env) {
+  return (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+}
 
 async function replyFromGemini(env, model, key, prompt) {
   // Flash models think by default and those tokens come out of
@@ -152,10 +211,10 @@ async function replyFromGemini(env, model, key, prompt) {
       console.warn(`${model} rejected thinkingConfig, retrying without it`);
       response = await callGemini(model, key, prompt, null);
     } else {
-      throw new Error(`Gemini ${response.status}: ${detail}`);
+      throw geminiError(response.status, detail);
     }
   }
-  if (!response.ok) throw new Error(`Gemini ${response.status}: ${await errorMessage(response)}`);
+  if (!response.ok) throw geminiError(response.status, await errorMessage(response));
 
   const gemini = await response.json();
   const candidate = gemini.candidates?.[0];
@@ -165,32 +224,6 @@ async function replyFromGemini(env, model, key, prompt) {
   const reply = parseReply(text);
   if (!reply) throw new Error('Gemini returned unparseable JSON');
   return reply;
-}
-
-async function replyFromOpenAI(env, models, key, prompt) {
-  const baseUrl = (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const deadline = Date.now() + TOTAL_MS;
-  const failures = [];
-
-  for (const model of models) {
-    if (Date.now() >= deadline) break;
-    try {
-      const reply = await tryModel(baseUrl, model, key, prompt);
-      // Which model actually answered, because with a fallback list the one in
-      // /health is only the first choice.
-      return { ...reply, model };
-    } catch (error) {
-      // Only credentials mean every other model would fail the same way.
-      // Everything else is this model's problem — a saturated free pool, an
-      // upstream hiccup, an opaque 400 — so try the next one. Walking the
-      // list costs a second; giving up costs the reply.
-      if (error.fatal) throw error;
-      console.warn(`${model}: ${error.message}`);
-      failures.push(`${model} ${error.message}`);
-    }
-  }
-
-  throw new Error(`no model answered (${failures.join('; ') || 'out of time'})`);
 }
 
 async function tryModel(baseUrl, model, key, prompt) {
