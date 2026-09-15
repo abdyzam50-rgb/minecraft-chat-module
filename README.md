@@ -127,52 +127,46 @@ Artifact it writes every reply live through Claude on the viewer's own account,
 including the repeat guard rewriting a line that came back too similar; opened
 as a local file it falls back to the canned lines and says so.
 
-### GitHub Pages sandbox with Gemini
+### Hosted test site
 
-Live at **https://abdyzam50-rgb.github.io/minecraft-chat-module/**, backed by
-the Worker at `https://minecraft-chat-gemini.abdyzam50.workers.dev`.
+Live at **https://minecraft-chat-gemini.abdyzam50.workers.dev/** — the page and
+the Gemini API are the same Cloudflare Worker, so there is one origin and no
+CORS to get wrong.
 
-`web/` publishes the same sandbox to GitHub Pages. It is the identical HTML the
-Artifact runs — the only difference is `config.js`:
+It is the identical HTML the Artifact runs. The only difference is `config.js`:
 
 | `window.MCCHAT_API_URL` | Where replies come from |
 |---|---|
-| a Worker URL | Gemini, through the Worker (GitHub Pages) |
+| `location.origin` (what the deploy writes) | Gemini, via this Worker |
 | empty, inside an Artifact | the viewer's own Claude, via `claude.use("sample")` |
 | empty, anywhere else | the canned offline lines |
 
-The page never holds a Gemini key. It posts its prompt to the Worker in
-`cloudflare-worker/`, which makes the Gemini call server-side.
+The page never holds a Gemini key. It posts its prompt to `/api/reply`; the
+Worker adds the key server-side.
 
-`.github/workflows/deploy-test-site.yml` does both deployments on a push. It
-needs three repository secrets — `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
-`GEMINI_API_KEY` — and checks for them before doing anything, so a missing one
-names itself instead of failing halfway.
+`.github/workflows/deploy-test-site.yml` deploys both on a push. It needs three
+repository secrets — `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GEMINI_API_KEY` —
+and checks for all three up front so a missing one names itself. After
+deploying it polls the live site until `/health` reports its key and
+`/chat-sandbox.html` returns 200, so a green run means the site actually works
+rather than that wrangler exited zero.
 
-**One manual step first.** A Cloudflare account cannot publish to
-`*.workers.dev` until it has claimed a subdomain, and that is a dashboard click
-no API token can do:
+`web/` is copied to `cloudflare-worker/public/` at deploy time and served by
+Wrangler's static assets. Anything that is not a file there falls through to
+`src/index.js`, which handles `/api/reply` and `/health`.
 
-> Cloudflare dashboard → **Workers & Pages** → pick a subdomain
-
-Without it `wrangler deploy` exits with *"You need to register a workers.dev
-subdomain"*. The workflow detects that exact message and says so in the run
-summary rather than leaving you to read the log.
-
-The Worker job is `continue-on-error`, and Pages deploys either way. A broken or
-undeployed Worker therefore costs you the live replies, not the site: the page
-health-checks the Worker on load, and falls back to canned lines with the status
-chip reading `offline · lines repeat`.
-
-The Worker URL is public by design, so keep this deployment for testing unless
-you put Cloudflare Access in front of it. `ALLOWED_ORIGIN` stops other websites'
-browsers from reading replies; it does not authenticate direct requests.
+**One manual step, once per Cloudflare account.** Publishing to `*.workers.dev`
+needs a subdomain claimed in the dashboard (Workers & Pages → pick a subdomain);
+no API token can do it. The workflow recognises that specific wrangler error and
+says so in the run summary.
 
 **Model choice moves.** `gemini-2.5-flash` was retired for new accounts during
-this build and every reply 404'd until the model was changed. The Worker passes
-Gemini's own error text through for exactly this reason — the message named both
-the problem and the replacement. Change the model in one place,
-`cloudflare-worker/wrangler.jsonc`, and push.
+this build and every reply 404'd until it changed. The Worker passes Gemini's own
+error text through for exactly that reason — the message named both the problem
+and the replacement. Change it in one place, `cloudflare-worker/wrangler.jsonc`.
+
+The Worker URL is public by design, so keep this for testing unless you put
+Cloudflare Access in front of it.
 
 ### Hooking up the client
 

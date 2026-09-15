@@ -3,5 +3,9 @@
   "name": "minecraft-chat-gemini",
   "main": "src/index.js",
   "compatibility_date": "2026-09-14",
+  // The workflow copies web/ to ./public before deploying, so the page and the
+  // API share one origin. Requests that do not match a file fall through to
+  // src/index.js, which is what serves /api/reply and /health.
+  "assets": { "directory": "./public" },
   "vars": { "GEMINI_MODEL": "gemini-3.6-flash" }
 }

@@ -2,3 +2,6 @@ node_modules/
 .env
 config.json
 *.log
+
+# Built by the deploy workflow: a copy of web/ for the Worker to serve.
+cloudflare-worker/public/

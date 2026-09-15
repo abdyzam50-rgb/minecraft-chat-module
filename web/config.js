@@ -1,5 +1,5 @@
-// Public: the deployed Worker URL only, never an API key.
-// Empty means no Worker — the page then uses the viewer's own Claude when it
-// is running as an Artifact, and canned lines anywhere else.
-// The deploy workflow overwrites this file with the real Worker URL.
+// Public: the API origin only, never a key.
+// The deploy workflow rewrites this file. Empty means no API — the page then
+// uses the viewer's own Claude when it runs as an Artifact, and canned lines
+// anywhere else.
 window.MCCHAT_API_URL = '';
