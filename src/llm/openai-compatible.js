@@ -26,7 +26,7 @@ export class OpenAICompatibleResponder {
     this.systemPrompt = buildSystemPrompt(config);
     this.fetch = fetchImpl;
     this.baseUrl = (config.llm.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
-    this.apiKey = config.llm.apiKey || keyForHost(this.baseUrl, process.env);
+    this.apiKey = (config.llm.apiKey || keyForHost(this.baseUrl, process.env)).trim();
     this.available = Boolean(this.apiKey);
     /** Set once a model turns out not to accept a JSON schema. */
     this.schemaUnsupported = false;

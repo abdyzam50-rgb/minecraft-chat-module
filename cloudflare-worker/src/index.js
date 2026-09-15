@@ -38,7 +38,11 @@ const THINK_BLOCK = /<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi;
  * OpenRouter and is named after them.
  */
 function gatewayKey(env) {
-  return env.TOKENROUTER_API_KEY || env.OPENROUTER_API_KEY || env.OPENAI_API_KEY || '';
+  const key = env.TOKENROUTER_API_KEY || env.OPENROUTER_API_KEY || env.OPENAI_API_KEY || '';
+  // Trimmed because a key pasted into a repo secret often carries a trailing
+  // newline, and the gateway rejects that as "Invalid token" — which reads as
+  // a wrong key rather than a whitespace problem.
+  return key.trim();
 }
 
 /**
