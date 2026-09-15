@@ -962,7 +962,7 @@
         }
         // Name the actual model, not the provider: the whole point of the page
         // is comparing how different ones write a two-word reply.
-        upstreamName = status.model || status.provider || "the Worker";
+        upstreamName = String(status.model || status.provider || "the Worker").split("/").pop();
         setLive(true, "live · " + upstreamName);
         return;
       } catch (error) {
@@ -1087,9 +1087,17 @@
         const reply = await response.json();
         if (!response.ok) throw new Error(reply.error || "Worker request failed");
         if (!reply.respond || !reply.message) {
-          return { source: "gemini", message: null, reason: reply.reason || "chose to stay quiet" };
+          return { source: modelLabel(reply), message: null, reason: reply.reason || "chose to stay quiet" };
         }
-        return { source: "gemini", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)), reason: reply.reason };
+        // Label the line with whichever model answered. The chain has six
+        // rungs, so "gemini" on a reply that came from gpt-oss is not a
+        // cosmetic slip — it is the log naming the wrong model while you are
+        // trying to judge which one writes better.
+        return {
+          source: modelLabel(reply),
+          message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)),
+          reason: reply.reason,
+        };
       } catch (error) {
         // A rate limit or a blip is not a reason to give up on live replies for
         // the rest of the session — the free tier allows 20 requests a minute
@@ -1137,6 +1145,14 @@
       }
       return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
     }
+  }
+
+  /** Short name of the model that answered, for the log. */
+  function modelLabel(reply) {
+    const model = String((reply && reply.model) || "").trim();
+    if (!model) return upstreamName;
+    // "openai/gpt-oss-120b" reads as "gpt-oss-120b" in a narrow log column.
+    return model.split("/").pop();
   }
 
   /** Will this fix itself if we just try again in a moment? */
