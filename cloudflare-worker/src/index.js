@@ -69,7 +69,10 @@ function keyShape(env) {
     // Every gateway key is printable ASCII with no spaces. Anything else is
     // what broke the header.
     headerSafe: /^[\x21-\x7e]+$/.test(key),
-    prefix: key.slice(0, 3),
+    // Which gateway issued it, as one bit rather than as characters: /health
+    // is public, so it says what the key *is*, never any part of it. An
+    // OpenRouter key is sk-or-v1- and 64 hex after it.
+    looksLikeOpenRouter: /^sk-or-v1-[0-9a-f]{64}$/.test(key),
   };
 }
 
