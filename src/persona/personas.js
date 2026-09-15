@@ -124,7 +124,7 @@ export const PERSONAS = {
         'nobody asked',
         'move then',
       ],
-      hostile: ['fuck off', 'get a life', 'stop being a bitch', 'fuck you', 'cry harder', 'touch grass', 'keep coping', 'nobody asked'],
+      hostile: ['fuck off', 'get a life', 'stop being a bitch', 'fuck you', 'fuck you too', 'cry harder', 'touch grass', 'keep coping', 'nobody asked'],
       opener: ['?', 'what', 'wha', 'yh'],
       smalltalk: ['all g', 'np', 'yh', 'cool'],
       confused: ['what?', 'uh what', 'wdym', 'eh?'],

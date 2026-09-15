@@ -108,7 +108,10 @@ export function accusationTarget(text, isNamed) {
 
 /** Someone telling us to move / complaining about our pathing. */
 export const HOSTILE_NUDGE = new RegExp(
-  ['get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away'].join('|'),
+  [
+    'get\\s?out', 'move\\b', 'my\\s?spot', 'stop\\s?follow', 'leave\\b', 'go\\s?away',
+    'fuck\\s?(?:you|u|off)', 'shut\\s?up', 'bitch\\b', 'dumbass', 'get\\s?a\\s?life',
+  ].join('|'),
   'i',
 );
 

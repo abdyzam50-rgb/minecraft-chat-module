@@ -492,7 +492,7 @@
         "report it then bitch",
       ],
       spot_claim: ["idc fuck off", "go fuck yourself", "cry about it", "not moving", "fuck you, find another spot", "cry harder", "touch grass", "keep coping", "nobody asked", "move then"],
-      hostile: ["fuck off", "get a life", "stop being a bitch", "fuck you", "cry harder", "touch grass", "keep coping", "nobody asked"],
+      hostile: ["fuck off", "get a life", "stop being a bitch", "fuck you", "fuck you too", "cry harder", "touch grass", "keep coping", "nobody asked"],
       opener: ["?", "what", "wha", "yh"],
       greeting: ["yo", "wsg", "ey", "hey"],
       smalltalk: ["all g", "np", "yh", "cool"],
@@ -543,7 +543,7 @@
   /* ---------- detectors (src/detect/) ---------- */
 
   const ACCUSATION = /cheat(?:er|ing|s)?|hack(?:er|ing|s)?|macro(?:ing|er|s)?|botting|(?:you|u|ur)\s*(?:re|r)?\s*a?\s*bot\b|autoclick(?:er|ing)?|auto\s?click|script(?:ing|er)?|report(?:ing|ed)?\s?(?:you|u)\b|get\s?(?:you|u)\s?banned/i;
-  const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away/i;
+  const HOSTILE = /get\s?out|move\b|my\s?spot|stop\s?follow|leave\b|go\s?away|fuck\s?(?:you|u|off)|shut\s?up|bitch\b|dumbass|get\s?a\s?life/i;
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;

@@ -252,6 +252,7 @@ test('a bare insult from someone next to us is still taken personally', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', 'cheater'), NOW)?.kind, 'accusation');
+  assert.equal(detectFromChat(store, config, chat('Dream', 'fuck you'), NOW)?.kind, 'hostile');
 });
 
 test('stacked greetings are still just hello', () => {
