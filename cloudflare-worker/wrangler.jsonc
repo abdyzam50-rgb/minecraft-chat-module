@@ -3,5 +3,5 @@
   "name": "minecraft-chat-gemini",
   "main": "src/index.js",
   "compatibility_date": "2026-09-14",
-  "vars": { "GEMINI_MODEL": "gemini-2.5-flash" }
+  "vars": { "GEMINI_MODEL": "gemini-3.6-flash" }
 }

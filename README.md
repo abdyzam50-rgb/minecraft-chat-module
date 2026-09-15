@@ -45,7 +45,7 @@ mineflayer adapter.
 contract, so swapping is one config line.
 
 ```jsonc
-{ "llm": { "provider": "gemini", "model": "gemini-2.5-flash" } }   // GEMINI_API_KEY
+{ "llm": { "provider": "gemini", "model": "gemini-3.6-flash" } }   // GEMINI_API_KEY
 { "llm": { "provider": "claude", "model": "claude-opus-5" } }      // ANTHROPIC_API_KEY
 ```
 

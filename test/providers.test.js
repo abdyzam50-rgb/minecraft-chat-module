@@ -15,7 +15,7 @@ function geminiConfig(overrides = {}) {
 
 test('each provider gets its own default model', () => {
   assert.equal(resolveConfig({ username: '3172' }).llm.model, 'claude-opus-5');
-  assert.equal(geminiConfig().llm.model, 'gemini-2.5-flash');
+  assert.equal(geminiConfig().llm.model, 'gemini-3.6-flash');
   assert.equal(geminiConfig({ model: 'gemini-2.5-pro' }).llm.model, 'gemini-2.5-pro');
 });
 
@@ -51,7 +51,7 @@ test('gemini sends the prompt, the schema and the key in the shapes it expects',
 
   assert.equal(result.message, 'yh?');
   assert.equal(result.source, 'gemini');
-  assert.match(seen.url, /gemini-2\.5-flash:generateContent$/);
+  assert.match(seen.url, /gemini-3\.6-flash:generateContent$/);
   assert.equal(seen.init.headers['x-goog-api-key'], 'test-key');
 
   const body = JSON.parse(seen.init.body);
@@ -99,7 +99,7 @@ test('resolving one config never leaks into the next', () => {
   assert.equal(first.llm.model, 'claude-opus-5');
 
   const second = resolveConfig({ username: '3172', llm: { provider: 'gemini' } });
-  assert.equal(second.llm.model, 'gemini-2.5-flash');
+  assert.equal(second.llm.model, 'gemini-3.6-flash');
 
   const third = resolveConfig({ username: '3172' });
   assert.equal(third.llm.model, 'claude-opus-5');
@@ -116,7 +116,7 @@ test('a model left over from another provider is corrected, not sent', () => {
     { MCCHAT_PROVIDER: 'gemini' },
   );
   assert.equal(config.llm.provider, 'gemini');
-  assert.equal(config.llm.model, 'gemini-2.5-flash');
+  assert.equal(config.llm.model, 'gemini-3.6-flash');
   assert.equal(config.llm.correctedModel, 'claude-opus-5', 'and it says what it changed');
 });
 

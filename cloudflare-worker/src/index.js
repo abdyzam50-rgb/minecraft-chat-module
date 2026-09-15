@@ -44,31 +44,31 @@ export default {
       return json({ error: 'prompt must be between 1 and 12000 characters' }, 400, headers);
     }
 
-    const model = env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const response = await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          // 2.5 Flash thinks by default and those tokens come out of this
-          // budget, so a small cap returns an empty candidate with
-          // finishReason MAX_TOKENS. A one-line chat reply does not need
-          // thinking, and turning it off is faster as well as cheaper.
-          thinkingConfig: { thinkingBudget: 0 },
-          maxOutputTokens: 800,
-          responseMimeType: 'application/json',
-          responseSchema: REPLY_SCHEMA,
-        },
-      }),
-    });
+    const model = env.GEMINI_MODEL || 'gemini-3.6-flash';
+
+    // Flash models think by default and those tokens come out of
+    // maxOutputTokens, so without this a small cap returns an empty candidate
+    // with finishReason MAX_TOKENS. A one-line chat reply does not need
+    // thinking, and turning it off is faster and cheaper. Support for the
+    // field varies by model generation, hence the retry below.
+    let response = await callGemini(env, model, prompt, { thinkingBudget: 0 });
+    if (!response.ok) {
+      const detail = await errorMessage(response);
+      if (response.status === 400 && /thinking/i.test(detail)) {
+        console.warn(`${model} rejected thinkingConfig, retrying without it`);
+        response = await callGemini(env, model, prompt, null);
+      } else {
+        console.error('Gemini request failed:', response.status, detail);
+        // Gemini's own message names the real problem — a retired model, a bad
+        // key, quota — and contains no secret, so pass it through. A generic
+        // 502 costs an hour of guessing.
+        return json({ error: `Gemini ${response.status}: ${detail}` }, 502, headers);
+      }
+    }
 
     if (!response.ok) {
       const detail = await errorMessage(response);
       console.error('Gemini request failed:', response.status, detail);
-      // Gemini's own message names the real problem (bad key, quota, bad
-      // model) and contains no secret, so pass it through — a generic 502
-      // costs an hour of guessing.
       return json({ error: `Gemini ${response.status}: ${detail}` }, 502, headers);
     }
 
@@ -86,6 +86,24 @@ export default {
     return reply ? json(reply, 200, headers) : json({ error: 'Gemini returned unparseable JSON' }, 502, headers);
   },
 };
+
+function callGemini(env, model, prompt, thinkingConfig) {
+  const generationConfig = {
+    maxOutputTokens: 800,
+    responseMimeType: 'application/json',
+    responseSchema: REPLY_SCHEMA,
+  };
+  if (thinkingConfig) generationConfig.thinkingConfig = thinkingConfig;
+
+  return fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig,
+    }),
+  });
+}
 
 async function errorMessage(response) {
   const raw = await response.text();

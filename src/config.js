@@ -250,7 +250,7 @@ function fromEnv(env) {
 
 const DEFAULT_MODELS = {
   claude: 'claude-opus-5',
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-3.6-flash',
 };
 
 /** Which provider a model id plainly belongs to, if it is obvious. */
