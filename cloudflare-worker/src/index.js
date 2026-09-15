@@ -159,6 +159,37 @@ export default {
         headers,
       );
     }
+    // What the gateway key can actually reach. Model lists are public
+    // information, and guessing ids from a screenshot is how an hour goes
+    // into a 401 that turns out to name a model the gateway never had.
+    if (request.method === 'GET' && url.pathname === '/models') {
+      const key = gatewayKey(env);
+      if (!key) return json({ error: 'no gateway key configured' }, 500, headers);
+      const base = openaiBaseUrl(env);
+      try {
+        const upstream = await fetch(`${base}/models`, {
+          signal: AbortSignal.timeout(PER_MODEL_MS),
+          headers: { authorization: `Bearer ${key}` },
+        });
+        if (!upstream.ok) {
+          return json(
+            { baseUrl: base, status: upstream.status, error: await errorMessage(upstream) },
+            200,
+            headers,
+          );
+        }
+        const body = await upstream.json();
+        const ids = (body.data ?? []).map((model) => model.id);
+        return json(
+          { baseUrl: base, count: ids.length, free: ids.filter(isFreeId), all: ids },
+          200,
+          headers,
+        );
+      } catch (error) {
+        return json({ baseUrl: base, error: error.message }, 200, headers);
+      }
+    }
+
     if (request.method !== 'POST' || url.pathname !== '/api/reply') {
       return json({ error: 'not found' }, 404, headers);
     }
@@ -224,6 +255,11 @@ function geminiError(status, detail) {
   const error = new Error(`${status}: ${detail}`);
   error.fatal = status === 401 || status === 403;
   return error;
+}
+
+/** Gateways mark free variants as either "…:free" or "…-free". */
+function isFreeId(id) {
+  return /[-:]free$/i.test(id);
 }
 
 function openaiBaseUrl(env) {

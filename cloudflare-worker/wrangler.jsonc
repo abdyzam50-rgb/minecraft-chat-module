@@ -17,7 +17,7 @@
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
     "LLM_PROVIDER": "gemini",
-    "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
+    "OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
     "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free, google/gemma-4-31b-it:free, nex-agi/nex-n2.5-mini:free, inclusionai/ling-3.0-flash-vl:free, liquid/lfm-2.5-2.6b:free"
   }
 }
