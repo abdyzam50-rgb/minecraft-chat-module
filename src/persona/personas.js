@@ -105,8 +105,8 @@ export const PERSONAS = {
           'fuck off',
         ],
         3: [
-          'get lost',
           'fuck off',
+          'get lost',
         ],
       },
       accusation: [

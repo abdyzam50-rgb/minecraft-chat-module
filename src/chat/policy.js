@@ -1,7 +1,7 @@
 import { findRepeat } from './similarity.js';
 
 /** Exchanges worth cutting short rather than seeing through. */
-const ARGUMENT_KINDS = new Set(['accusation', 'hostile', 'macro_check']);
+const ARGUMENT_KINDS = new Set(['accusation', 'hostile', 'hostile_followup', 'macro_check']);
 
 /**
  * Rate limiting and repeat suppression.

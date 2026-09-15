@@ -93,6 +93,7 @@ function macroCheckTrigger({ blocker, count, patience, rage, stalledFor = 0, sai
     severity: anger,
     anger,
     escalates: anger > 1,
+    forceFallback: config.persona === 'unfiltered',
     evidence,
     channel: 'all',
   };
@@ -145,6 +146,9 @@ export function detectMacroCheckTalk(store, config, message, ts = Date.now()) {
     // Always answer a typed check, at whatever temper it has reached. Silence
     // is the single thing it is looking for.
     escalates: anger > 1,
+    // Repeated macro checks are deliberate bait. The unfiltered persona uses
+    // its short escalation ladder rather than model-written improvisation.
+    forceFallback: config.persona === 'unfiltered',
     evidence,
     channel: message.channel === 'whisper' ? 'whisper' : message.channel,
   };

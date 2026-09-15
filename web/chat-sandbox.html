@@ -518,7 +518,7 @@
       macro_check: {
         1: ["im real", "fuck off"],
         2: ["move dumbass", "fuck off"],
-        3: ["get lost", "fuck off"],
+        3: ["fuck off", "get lost"],
       },
       accusation: [
         "fuck you, im not cheating",
@@ -776,7 +776,7 @@
     spotClaimRadius: 20, // a spot claim reaches further
   };
   const CONVO = { windowMs: 120000, cooldownMs: 2500, maxTurns: 24, maxArgumentTurns: 3 };
-  const ARGUMENT_KINDS = ["accusation", "hostile", "macro_check"];
+  const ARGUMENT_KINDS = ["accusation", "hostile", "hostile_followup", "macro_check"];
   const REPEAT_MEMORY = 24; // finite session memory; older repeats are normal
 
   const LIMITS = {
@@ -1641,6 +1641,8 @@
       return respond({
         kind: "macro_check", subject: player.name, channel: channel, anger: anger,
         conversational: true, escalates: anger > 1,
+        // Do not let the live model turn a repeated check into unrelated slang.
+        forceFallback: state.persona === "unfiltered",
         evidence: shortName(player.name) + ' typed "' + escapeHtml(text) + '" at me' +
           (asked > 1 ? " \u2014 that is ask number " + asked : "") +
           ". They are macro checking me; what they are testing for is whether i answer at all." +
@@ -1811,6 +1813,7 @@
     const fuse = fuseFor(player.name);
     return respond({
       kind: "macro_check", subject: player.name, channel: state.channel, anger,
+      forceFallback: state.persona === "unfiltered",
       conversational: Boolean(said),
       escalates: anger > 1,
       evidence: shortName(player.name) + " has stood in front of me " + count + "x" +

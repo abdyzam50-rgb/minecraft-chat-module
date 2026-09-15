@@ -124,6 +124,18 @@ test('"u real?" counts as a macro check when they are next to us', () => {
   assert.match(trigger.evidence, /macro check/);
 });
 
+test('unfiltered macro checks use the deterministic escalation ladder', () => {
+  const { config, store } = setup({ persona: 'unfiltered' });
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+  const first = detectFromChat(store, config, chat('Checker', 'u real?'), NOW);
+  const second = detectFromChat(store, config, chat('Checker', 'u real?'), NOW + 1000);
+  const third = detectFromChat(store, config, chat('Checker', 'macro check say something'), NOW + 2000);
+  assert.equal(first?.forceFallback, true);
+  assert.equal(second?.forceFallback, true);
+  assert.equal(third?.forceFallback, true);
+  assert.deepEqual([first?.anger, second?.anger, third?.anger], [1, 2, 3]);
+});
+
 test('macro-check talk from across the lobby is ignored', () => {
   const { config, store } = setup();
   const trigger = detectFromChat(store, config, chat('Stranger', 'say something'), NOW);
