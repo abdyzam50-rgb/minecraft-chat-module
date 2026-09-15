@@ -55,6 +55,8 @@ export const DEFAULTS = {
      * the giveaway.
      */
     preferredLength: 24,
+    /** Default hard word limit for every outgoing reply. */
+    replyWords: 4,
     /**
      * Hard word cap on replies that are meant to be tiny — a bare call-out or
      * an acknowledgement. Enforced, not requested: the model keeps appending a

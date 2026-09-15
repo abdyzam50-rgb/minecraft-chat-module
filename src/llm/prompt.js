@@ -137,6 +137,10 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     );
   }
 
+  if (trigger.kind === 'macro_check') {
+    lines.push('This is a macro check. Reply in one or two words only: "yh real", "real", "what", or "move". Do not explain, argue, or add their name.');
+  }
+
   if (trigger.askedActivity) {
     lines.push('They asked what you are doing. Keep the answer tiny: "ghosts", "still ghosts", "ghost grinding", or "doing ghosts". Do not turn this into a sentence or add "you?" unless they asked more than that.');
   }

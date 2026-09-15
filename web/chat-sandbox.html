@@ -1107,6 +1107,7 @@
       trigger.compliment
         ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
         : "",
+      trigger.kind === "macro_check" ? 'This is a macro check. Reply in one or two words only: "yh real", "real", "what", or "move". Do not explain, argue, or add their name.' : "",
       trigger.askedActivity ? 'They asked what you are doing. Keep the answer tiny: "ghosts", "still ghosts", "ghost grinding", or "doing ghosts". Do not turn it into a sentence or add "you?" unless they asked more than that.' : "",
       trigger.answeredUs
         ? "You asked them something and this is their answer. They have not asked you anything back, so the exchange is finished. Set respond to false — saying nothing is what a person does here. Do not acknowledge it, do not start a new subject, and above all do not tell them what you are doing."
@@ -1285,8 +1286,11 @@
   }
 
   function terseFor(trigger) {
-    if (!trigger.opener && !trigger.greeting && !trigger.smalltalk && !trigger.uncertain && !trigger.closes) return null;
-    return { maxWords: 2, stripNames: [trigger.subject, shortName(trigger.subject || "")] };
+    const names = [trigger.subject, shortName(trigger.subject || "")];
+    if (trigger.opener || trigger.greeting || trigger.smalltalk || trigger.uncertain || trigger.closes || trigger.kind === "macro_check") {
+      return { maxWords: 2, stripNames: names };
+    }
+    return { maxWords: 4, stripNames: names };
   }
 
   /* ---------- the pipeline ---------- */

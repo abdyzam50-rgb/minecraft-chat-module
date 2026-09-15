@@ -136,13 +136,10 @@ export class ChatAI extends EventEmitter {
       .slice(0, this.config.chat.avoidHistory);
     const nameFatigue = this.nameFatigue(trigger);
     const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
-    // A bare call-out or an acknowledgement gets two words, no name, always.
-    const terse = (trigger.opener || trigger.smalltalk || trigger.uncertain || trigger.closes)
-      ? {
-          maxWords: this.config.chat.terseWords,
-          stripNames: [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })],
-        }
-      : {};
+    const replyNames = [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })];
+    const terse = (trigger.opener || trigger.smalltalk || trigger.uncertain || trigger.closes || trigger.kind === 'macro_check')
+      ? { maxWords: this.config.chat.terseWords, stripNames: replyNames }
+      : { maxWords: this.config.chat.replyWords, stripNames: replyNames };
 
     let decision = await this.think(trigger, ts, { avoid, nameFatigue });
     if (!decision) return null;
