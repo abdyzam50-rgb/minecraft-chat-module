@@ -42,6 +42,8 @@ jobs:
           // Served by the Worker, so the API is this same origin.
           window.MCCHAT_API_URL = location.origin;
           JS
+          # Serve the sandbox at / directly instead of redirecting to it.
+          cp web/chat-sandbox.html cloudflare-worker/public/index.html
           ls -1 cloudflare-worker/public
 
       - name: Deploy Worker and site
@@ -79,8 +81,8 @@ jobs:
         run: |
           ok=0
           for attempt in 1 2 3 4 5 6; do
-            health="$(curl -fsS "$WORKER_URL/health" || true)"
-            page="$(curl -fsS -o /dev/null -w '%{http_code}' "$WORKER_URL/chat-sandbox.html" || true)"
+            health="$(curl -fsSL "$WORKER_URL/health" || true)"
+            page="$(curl -fsSL -o /dev/null -w '%{http_code}' "$WORKER_URL/" || true)"
             echo "attempt $attempt: health=$health page=$page"
             case "$health:$page" in
               *'"keyConfigured":true'*:200) ok=1; break ;;
