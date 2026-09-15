@@ -95,22 +95,22 @@ export const PERSONAS = {
     fallback: {
       macro_check: {
         1: [
-          '{short} im real, get the hell out of my path',
-          '{short} macro check\'s over, move',
+          '{short} im real, get out my path',
+          '{short} macro checks over, fuck off',
         ],
         2: [
-          '{short} move. seriously. ive told you twice.',
-          '{short} im not a macro, now piss off',
+          '{short} move dumbass, told u twice',
+          '{short} fuck off already',
         ],
         3: [
-          '{short} get out of my face you absolute muppet, im not a macro',
-          '{short} move. right now. ive had enough of you.',
+          '{short} get a life and fuck off',
+          '{short} stop being a bitch',
         ],
       },
       accusation: [
-        'i\'m not cheating you muppet, go touch grass',
-        'not macroing, you\'re just bad at this game',
-        'report me then, dipshit',
+        'fuck you, im not cheating',
+        'get a life',
+        'report it then bitch',
       ],
       spot_claim: [
         'mb ill move',
@@ -119,7 +119,7 @@ export const PERSONAS = {
         'fine, ill shift over',
         'my bad, going',
       ],
-      hostile: ['piss off', 'shut up already', 'fuck off', 'get lost'],
+      hostile: ['fuck off', 'get a life', 'stop being a bitch', 'fuck you'],
       opener: ['?', 'what', 'wha', 'yh'],
       smalltalk: ['all g', 'np', 'yh', 'cool'],
       confused: ['what?', 'uh what', 'wdym', 'eh?'],
