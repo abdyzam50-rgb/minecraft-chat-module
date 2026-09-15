@@ -13,6 +13,7 @@ import {
   nearMiss,
   isGreetingOnly,
   isSmallTalk,
+  normalizeChatText,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
   MUTE_NOTICE,
@@ -445,17 +446,18 @@ export function detectMuted(message) {
  * @returns {Trigger|null}
  */
 export function detectFromChat(store, config, message, ts = Date.now()) {
+  const normalized = { ...message, content: normalizeChatText(message.content) };
   return (
     // A denial answers a question we asked, so it comes before everything.
-    detectStandDown(store, config, message, ts) ??
-    detectMacroCheckTalk(store, config, message, ts) ??
-    detectAccusation(store, config, message, ts) ??
-    detectSpotClaim(store, config, message, ts) ??
-    detectHostile(store, config, message, ts) ??
+    detectStandDown(store, config, normalized, ts) ??
+    detectMacroCheckTalk(store, config, normalized, ts) ??
+    detectAccusation(store, config, normalized, ts) ??
+    detectSpotClaim(store, config, normalized, ts) ??
+    detectHostile(store, config, normalized, ts) ??
     // Before the plain mention: "yo 3712" contains a greeting, but it also
     // contains an attempt at a name that missed. Asking beats assuming.
     detectNearMiss(store, config, message, ts) ??
-    detectMention(store, config, message, ts) ??
+    detectMention(store, config, normalized, ts) ??
     null
   );
 }
@@ -484,5 +486,5 @@ function recentBurst(store, message, config, ts) {
         line.ts > answeredAt &&
         line.content,
     )
-    .map((line) => line.content);
+    .map((line) => normalizeChatText(line.content));
 }

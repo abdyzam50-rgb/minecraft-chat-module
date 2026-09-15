@@ -256,6 +256,21 @@ test('stacked greetings are still just hello', () => {
   }
 });
 
+
+test('normalizes conversational shorthand and small typos before matching intent', () => {
+  const cases = [
+    ['3172 watcha doin', 'askedActivity'],
+    ['3172 whatchu up2', 'askedActivity'],
+    ['3172 wut u doinnn', 'askedActivity'],
+    ['3172 how r u doinn', 'askedWellbeing'],
+  ];
+  for (const [text, expected] of cases) {
+    const { config, store } = setup({ username: '3172' });
+    store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+    const trigger = detectFromChat(store, config, chat('Dream', text), NOW);
+    assert.equal(trigger?.[expected], true, `"${text}" should be ${expected}`);
+  }
+});
 test('a greeting with a question attached is not just a greeting', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);

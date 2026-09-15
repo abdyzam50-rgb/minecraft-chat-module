@@ -64,6 +64,9 @@ export const CHAT_SLANG = [
   ['gm / gn', 'good morning / good night'],
   ['inv / req / add', 'invite me / send a friend request / add me'],
   ['dm / msg', 'direct message / message'],
+  ['watcha / whatcha / whatchu / wut u doin', 'what are you doing — casual activity question; small spelling differences carry the same intent'],
+  ['how r u / how ya doin', 'how are you — a wellbeing question, not a question about the grind'],
+  ['up2 / sup2', 'up to / what are you up to'],
 ];
 
 /** SkyBlock-specific terms, by area. */
