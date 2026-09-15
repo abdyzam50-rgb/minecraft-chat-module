@@ -5,6 +5,8 @@ import {
   AGGRESSIVE,
   ACTIVITY_QUESTION,
   WELLBEING_QUESTION,
+  WE_ASKED,
+  isPlainAnswer,
   CONFIRMATION,
   DENIAL,
   isCompliment,
@@ -376,6 +378,17 @@ export function detectMention(store, config, message, ts = Date.now()) {
   // asked after you, and the grind is not an answer to that.
   const askedWellbeing = WELLBEING_QUESTION.test(message.content);
 
+  // We asked them something, they answered, and asked nothing back. That is
+  // the end of the exchange, not a cue to start a new subject: "hbu" /
+  // "pretty good" / "still grinding ghosts" is a bot talking past someone.
+  const answeredUs =
+    Boolean(store.lastOutgoing) &&
+    ts - store.lastOutgoing.ts <= config.limits.conversation.windowMs &&
+    WE_ASKED.test(store.lastOutgoing.message) &&
+    isPlainAnswer(message.content) &&
+    !askedActivity &&
+    !askedWellbeing;
+
   // Nothing left once the name is gone and it is not a greeting — nothing to
   // answer. (A short message is not the same as an empty one: "wsg" and "idk"
   // are three characters and both want a reply.)
@@ -392,6 +405,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
     compliment,
     askedActivity: askedActivity && !askedWellbeing,
     askedWellbeing,
+    answeredUs,
     evidence: opener
       ? `${message.sender} just called my name — "${message.content}" — nothing else in it.`
       : smalltalk

@@ -547,9 +547,31 @@
   const SPOT_CLAIM = /\b(?:was|were)\s?(?:here|there)\s?first\b|\bi\s?was\s?here\b|\bbeen\s?(?:here|farming|mining|grinding)\s?(?:first|longer|a\s?while|since|for)\b|\b(?:this\s?is\s?)?my\s?(?:spot|vein|lane|corner|area)\b|\b(?:im|i\s?am|i\s?m)\s?(?:mining|farming|grinding|killing|working)\s?(?:here|this)\b|\b(?:can|could|would)\s?(?:you|u)\s?(?:please\s?)?(?:move|shift|go)\b|\bmind\s?moving\b|\b(?:you|u)\s?(?:took|stole|nicked)\s?my\b/i;
   const POLITE = /\b(?:excuse\s?me|please|pls|sorry|mind\s?if|would\s?you|could\s?you|thanks|ty)\b/i;
   const AGGRESSIVE = /\b(?:fuck|piss|shut\s?up|idiot|clown|dumb|stupid|loser|trash|get\s?(?:out|lost)|go\s?away|scram)\b/i;
-  const FILLER_WORDS = ["mb","my","bad","soz","sorry","apologies","all","g","good","np","no","worries","problem","fine","cool","nice","aight","ight","alr","alright","ok","okay","kk","k","gotcha","ic","i","see","fair","enough","true","word","bet","facts","lol","lmao","lmfao","haha","hahaha","hah","xd","rip","gg","ty","thanks","thx","tysm","cheers","ez","yh","yeah","ya","yep","yup","nah","oh","ah","ahh","damn","bro","man","mate","lad","dude","bruh","gang","twin"];
+  const FILLER_WORDS = ["mb","my","bad","soz","sorry","apologies","all","g","good","np","no","worries","problem","fine","cool","nice","aight","ight","alr","alright","ok","okay","kk","k","gotcha","ic","i","see","fair","enough","true","word","bet","facts","lol","lmao","lmfao","haha","hahaha","hah","xd","rip","gg","ty","thanks","thx","tysm","cheers","ez","yh","yeah","ya","yep","yup","nah","oh","ah","ahh","damn","bro","man","mate","lad","dude","bruh","gang","twin","pretty","quite","very","real","great","decent","grand","same","not","bad","meh","tired","chillin","chilling","vibing","nm","nmu","im","am","doing","been","feeling","still"];
 
   /** A message made only of filler is an acknowledgement, not a question. */
+  /** The last thing we said, or null. */
+  function lastSaid() {
+    return state.sent.length ? state.sent[state.sent.length - 1] : null;
+  }
+
+  /** Did our last line end with a question? Ask-backs carry no question mark. */
+  const WE_ASKED = /\?\s*$|\b(?:hbu|wbu|nmu|hru|u|you)\s*\??\s*$/i;
+
+  /**
+   * A plain answer: nothing asked, nothing to pick up. Reported: we asked
+   * "hbu", they said "pretty good", and the bot replied "still grinding
+   * ghosts" — a subject nobody opened, after the exchange had finished.
+   */
+  function isPlainAnswer(text) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed || /\?/.test(trimmed)) return false;
+    if (SHORT_QUESTION.test(trimmed)) return false;
+    // People drop the question mark constantly, and those are still questions.
+    if (/^(?:wh(?:at|o|y|ere|en|ich)|how|are|is|was|do|did|does|can|could|would|will|u|you|got|any)\b/i.test(trimmed)) return false;
+    return trimmed.split(/\s+/).filter(Boolean).length <= 5;
+  }
+
   function isSmallTalk(text) {
     const words = String(text || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
     return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
@@ -1071,6 +1093,9 @@
         ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
         : "",
       trigger.askedActivity ? "They asked what you are doing — say it: you are grinding ghosts." : "",
+      trigger.answeredUs
+        ? "You asked them something and this is their answer. They have not asked you anything back, so the exchange is finished. Set respond to false — saying nothing is what a person does here. Do not acknowledge it, do not start a new subject, and above all do not tell them what you are doing."
+        : "",
       trigger.askedWellbeing
         ? 'They asked how you are, not what you are doing. Answer that: "im good", "yeah good", "not bad", "cant complain", "tired ngl". Do not tell them about the grind unless they ask about it. This is the place where asking back is natural — "hbu", "wbu", "u?" — and it is what anyone would type here. One short line, both halves.'
         : "",
@@ -1447,6 +1472,13 @@
         opener: opener, greeting: greeting, smalltalk: smalltalk, compliment: compliment,
         askedActivity: ACTIVITY_QUESTION.test(text) && !WELLBEING_QUESTION.test(text),
         askedWellbeing: WELLBEING_QUESTION.test(text),
+        answeredUs:
+          Boolean(lastSaid()) &&
+          ts - lastSaid().ts <= 120000 &&
+          WE_ASKED.test(lastSaid().message) &&
+          isPlainAnswer(text) &&
+          !ACTIVITY_QUESTION.test(text) &&
+          !WELLBEING_QUESTION.test(text),
         evidence: opener
           ? shortName(player.name) + " just called my name, nothing else in it"
           : smalltalk

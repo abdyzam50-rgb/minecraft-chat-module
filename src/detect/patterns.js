@@ -147,8 +147,41 @@ const FILLER_WORDS = new Set([
   'lol', 'lmao', 'lmfao', 'haha', 'hahaha', 'hah', 'xd', 'rip',
   'gg', 'ty', 'thanks', 'thx', 'tysm', 'cheers', 'ez',
   'yh', 'yeah', 'ya', 'yep', 'yup', 'nah', 'oh', 'ah', 'ahh', 'damn',
+  // Answers to "hbu" — they close the loop rather than open anything.
+  'pretty', 'quite', 'very', 'real', 'great', 'decent', 'grand', 'same',
+  'not', 'bad', 'meh', 'tired', 'chillin', 'chilling', 'vibing', 'nm', 'nmu',
+  'im', 'am', 'doing', 'been', 'feeling', 'still',
   'bro', 'man', 'mate', 'lad', 'dude', 'bruh', 'gang', 'twin',
 ]);
+
+/**
+ * Did we end our last line with a question?
+ *
+ * "?" covers most of it, but the ask-backs people actually type carry no
+ * question mark: "hbu", "wbu", "u", "nmu", "you".
+ */
+export const WE_ASKED = /\?\s*$|\b(?:hbu|wbu|nmu|hru|u|you)\s*\??\s*$/i;
+
+/**
+ * A plain answer: no question in it, nothing to pick up.
+ *
+ * Reported: we asked "hbu", they said "pretty good", and the bot replied
+ * "still grinding ghosts". Nobody asked it anything — the exchange was over
+ * and the right move was silence.
+ */
+export function isPlainAnswer(text) {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed || /\?/.test(trimmed)) return false;
+  if (SHORT_QUESTION.test(trimmed)) return false;
+  // People drop the question mark constantly — "what you doing", "u good",
+  // "hows the grind" are all questions and none of them carry one.
+  if (/^(?:wh(?:at|o|y|ere|en|ich)|how|are|is|was|do|did|does|can|could|would|will|u|you|got|any)\b/i.test(trimmed)) {
+    return false;
+  }
+  // Longer than a few words and they are telling you something, not just
+  // closing the loop.
+  return trimmed.split(/\s+/).filter(Boolean).length <= 5;
+}
 
 /**
  * Is the whole message filler? Checked against what is left after our own name

@@ -140,6 +140,16 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push('They asked what you are doing — say it: you are grinding ghosts.');
   }
 
+  if (trigger.answeredUs) {
+    lines.push(
+      '',
+      // Reported: we asked "hbu", they said "pretty good", and the reply was
+      // "still grinding ghosts, np" — a new subject nobody opened.
+      'You asked them something and this is their answer. They have not asked you anything back, so the exchange is finished.',
+      'Set respond to false. Saying nothing here is what a person does — they read it and carry on playing. Do not acknowledge it, do not start a new subject, and above all do not tell them what you are doing.',
+    );
+  }
+
   if (trigger.askedWellbeing) {
     lines.push(
       '',

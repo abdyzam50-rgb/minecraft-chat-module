@@ -1133,3 +1133,46 @@ test('a yes carries the conversation on as normal', async () => {
 
   assert.deepEqual(said, ['maybe_mention', 'mention', 'mention']);
 });
+
+test('when they just answer the question we asked, we say nothing', async () => {
+  // Reported: "hows your day?" / "im good, Dream, hbu" / "pretty good" /
+  // "still grinding ghosts, np". The last line is a subject nobody opened,
+  // after an exchange that had already finished.
+  const capture = {};
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: mockClient({ respond: true, message: 'im good, hbu', reason: '' }, capture),
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a.message));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'xX_DreamSlayer_Xx', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: hows your day 3172?' });
+  assert.equal(said.length, 1, 'a question about you gets an answer');
+
+  // Long enough that the reply has been typed — otherwise the conversation
+  // cooldown stops this before it is ever read.
+  clock += 10_000;
+
+  // Their reply to our "hbu" closes it. The prompt has to be told so.
+  await ai.handle({ type: 'chat', raw: '[MVP+] xX_DreamSlayer_Xx: pretty good' });
+  const prompt = capture.params.messages[0].content;
+  assert.match(prompt, /exchange is finished/i);
+  assert.match(prompt, /Set respond to false/i);
+});
+
+test('"pretty good" and "not bad" read as closing an exchange, not opening one', async () => {
+  const { isSmallTalk, isPlainAnswer } = await import('../src/detect/patterns.js');
+  for (const line of ['pretty good', 'not bad', 'nm', 'im good', 'same']) {
+    assert.equal(isSmallTalk(line), true, line);
+    assert.equal(isPlainAnswer(line), true, line);
+  }
+  // A question is never a closing answer, however short.
+  for (const line of ['hbu', 'wyd', 'you good?', 'what you doing']) {
+    assert.equal(isPlainAnswer(line), false, line);
+  }
+  // Nor is something with actual content in it.
+  assert.equal(isSmallTalk('you still grinding those ghosts'), false);
+});
