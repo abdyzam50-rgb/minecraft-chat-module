@@ -133,3 +133,109 @@ test('a matching model is untouched', () => {
   const config = resolveConfig({ username: '3172', llm: { provider: 'gemini', model: 'gemini-2.5-pro' } });
   assert.equal(config.llm.model, 'gemini-2.5-pro');
 });
+
+/** Any OpenAI-shaped gateway: TokenRouter, OpenRouter, Groq, local Ollama. */
+function openaiConfig(overrides = {}) {
+  return resolveConfig({
+    username: '3172',
+    llm: {
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.tokenrouter.com/v1',
+      model: 'z-ai/glm-5.3-free',
+      ...overrides,
+    },
+  });
+}
+
+const stubStore = () => ({
+  self: {}, pathfinder: {}, players: new Map(), recentChat: () => [], lastOutgoing: null,
+});
+const stubTrigger = { kind: 'mention', subject: 'Dream', channel: 'all', evidence: 'x' };
+
+test('an openai-shaped gateway gets the standard chat-completions shape', async () => {
+  const { OpenAICompatibleResponder } = await import('../src/llm/openai-compatible.js');
+  const seen = {};
+  const responder = new OpenAICompatibleResponder(openaiConfig(), {
+    async fetchImpl(url, init) {
+      seen.url = url;
+      seen.init = init;
+      return {
+        ok: true,
+        async json() {
+          return { choices: [{ message: { content: JSON.stringify({ respond: true, message: 'yh?', reason: 'called' }) }, finish_reason: 'stop' }] };
+        },
+      };
+    },
+  });
+
+  const result = await responder.decide(stubStore(), stubTrigger, NOW);
+  assert.equal(result.message, 'yh?');
+  assert.equal(result.source, 'openai');
+  assert.equal(seen.url, 'https://api.tokenrouter.com/v1/chat/completions');
+  assert.equal(seen.init.headers.authorization, 'Bearer test-key');
+
+  const body = JSON.parse(seen.init.body);
+  assert.equal(body.model, 'z-ai/glm-5.3-free');
+  assert.equal(body.messages[0].role, 'system');
+  assert.equal(body.messages[1].role, 'user');
+  assert.equal(body.response_format.type, 'json_schema');
+});
+
+test('a model that refuses a schema falls back to json_object, once', async () => {
+  const { OpenAICompatibleResponder } = await import('../src/llm/openai-compatible.js');
+  const formats = [];
+  const responder = new OpenAICompatibleResponder(openaiConfig(), {
+    async fetchImpl(url, init) {
+      const format = JSON.parse(init.body).response_format.type;
+      formats.push(format);
+      if (format === 'json_schema') {
+        return { ok: false, status: 400, async text() { return JSON.stringify({ error: { message: 'response_format json_schema is not supported' } }); } };
+      }
+      return {
+        ok: true,
+        async json() {
+          return { choices: [{ message: { content: '{"respond":true,"message":"ok","reason":"r"}' } }] };
+        },
+      };
+    },
+  });
+
+  assert.equal((await responder.decide(stubStore(), stubTrigger, NOW)).message, 'ok');
+  assert.deepEqual(formats, ['json_schema', 'json_object']);
+
+  // It remembers, so the next reply does not waste a round trip.
+  await responder.decide(stubStore(), stubTrigger, NOW);
+  assert.deepEqual(formats, ['json_schema', 'json_object', 'json_object']);
+});
+
+test('a reasoning model\'s thinking is stripped before parsing', async () => {
+  const { OpenAICompatibleResponder } = await import('../src/llm/openai-compatible.js');
+  const responder = new OpenAICompatibleResponder(openaiConfig({ model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free' }), {
+    async fetchImpl() {
+      return {
+        ok: true,
+        async json() {
+          return { choices: [{ message: { content: '<think>They said my name. Keep it short.</think>\n{"respond":true,"message":"yh?","reason":"called"}' } }] };
+        },
+      };
+    },
+  });
+  assert.equal((await responder.decide(stubStore(), stubTrigger, NOW)).message, 'yh?');
+});
+
+test('provider openai insists on a model, since the gateway decides', () => {
+  assert.throws(
+    () => resolveConfig({ username: '3172', llm: { provider: 'openai', apiKey: 'k' } }),
+    /llm.model is required for provider "openai"/,
+  );
+});
+
+test('the brain wires up the openai provider too', () => {
+  const ai = createChatAI({
+    username: '3172',
+    llm: { provider: 'openai', apiKey: 'k', baseUrl: 'https://api.tokenrouter.com/v1', model: 'z-ai/glm-5.3-free' },
+  });
+  assert.equal(ai.responder.name, 'openai');
+  assert.equal(ai.usingApi, true);
+});

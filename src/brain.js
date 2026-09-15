@@ -6,6 +6,7 @@ import { sanitize, formatForChannel } from './chat/sanitize.js';
 import { Policy } from './chat/policy.js';
 import { ClaudeResponder } from './llm/claude.js';
 import { GeminiResponder } from './llm/gemini.js';
+import { OpenAICompatibleResponder } from './llm/openai-compatible.js';
 import { FallbackResponder } from './llm/fallback.js';
 import { detectFromChat, detectPathfinderBlock, detectMuted } from './detect/index.js';
 import { getPersona } from './persona/personas.js';
@@ -30,9 +31,7 @@ export class ChatAI extends EventEmitter {
     this.store = new ContextStore({ random, now: this.now });
     this.store.updateSelf({ username: this.config.username, ...this.config.self });
     this.policy = new Policy(this.config, { now: this.now });
-    this.responder = this.config.llm.provider === 'gemini'
-      ? new GeminiResponder(this.config)
-      : new ClaudeResponder(this.config, { client });
+    this.responder = makeResponder(this.config, client);
     /** @deprecated kept for callers that reached in before providers existed */
     this.claude = this.responder;
     this.fallback = new FallbackResponder(this.config);
@@ -278,6 +277,17 @@ function typingDelay(message, chat) {
 
 function pick([min, max]) {
   return min + Math.random() * Math.max(0, max - min);
+}
+
+function makeResponder(config, client) {
+  switch (config.llm.provider) {
+    case 'gemini':
+      return new GeminiResponder(config);
+    case 'openai':
+      return new OpenAICompatibleResponder(config);
+    default:
+      return new ClaudeResponder(config, { client });
+  }
 }
 
 export function createChatAI(options) {

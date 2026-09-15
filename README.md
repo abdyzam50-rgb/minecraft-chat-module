@@ -41,16 +41,39 @@ mineflayer adapter.
 
 ## Which model, and what it actually knows
 
-`llm.provider` takes `claude` (default) or `gemini`; both honour the same
-contract, so swapping is one config line.
+`llm.provider` takes `claude` (default), `gemini`, or `openai`; all three honour
+the same contract, so swapping is one config line.
 
 ```jsonc
 { "llm": { "provider": "gemini", "model": "gemini-3.6-flash" } }   // GEMINI_API_KEY
 { "llm": { "provider": "claude", "model": "claude-opus-5" } }      // ANTHROPIC_API_KEY
 ```
 
-The Gemini path is plain `fetch` against the REST API, so there's no extra
-dependency. Adding a third provider means one file with a `decide()` method.
+`openai` means the wire format, not the company: any gateway that serves
+`POST /v1/chat/completions` — TokenRouter, OpenRouter, Groq, Together, a local
+Ollama or LM Studio — is the same adapter with a different `baseUrl`.
+
+```jsonc
+{ "llm": { "provider": "openai",
+           "baseUrl": "https://api.tokenrouter.com/v1",
+           "model": "z-ai/glm-5.3-free" } }   // TOKENROUTER_API_KEY
+{ "llm": { "provider": "openai",
+           "baseUrl": "http://127.0.0.1:11434/v1",
+           "model": "llama3.1" } }            // no key needed, but set one anyway
+```
+
+`llm.model` is required for this provider and there's no default: the gateway
+decides what exists, and a guess that the gateway has never heard of fails as a
+404 at the first reply rather than at startup.
+
+Two things vary between models behind these gateways, and both are handled:
+structured output (a model that rejects `json_schema` is retried once as
+`json_object`, and the adapter remembers, so it costs one round trip per
+process, not one per reply), and reasoning models, which emit their working in
+a `<think>` block — that's stripped before parsing.
+
+Every provider path is plain `fetch` except Claude's, so there's no extra
+dependency. Adding a fourth means one file with a `decide()` method.
 
 Put the key in `.env` (which is gitignored) rather than in `config.json`:
 
@@ -58,6 +81,9 @@ Put the key in `.env` (which is gitignored) rather than in `config.json`:
 GEMINI_API_KEY=...
 MCCHAT_PROVIDER=gemini
 ```
+
+The `openai` adapter reads `OPENAI_API_KEY`, then `TOKENROUTER_API_KEY`, then
+`OPENROUTER_API_KEY`, so you can keep several and switch by `baseUrl`.
 
 Then check it actually works before you rely on it:
 
@@ -183,6 +209,17 @@ and stays live, rather than falling back to canned lines for the session. But
 for anything sustained — and certainly in-game — you want billing enabled on the
 Google Cloud project, or a model with a larger free allowance. That is a real
 cost decision, not something to enable without meaning to.
+
+Worth knowing before chasing a free gateway instead: that 429 came from burst
+testing, not from play. The rate limiter is capped at 8 messages a minute and
+real sessions sit far below it, so the limit you keep hitting while tuning the
+persona is not the limit you hit while grinding. The `:free` model IDs on
+gateways like TokenRouter and OpenRouter are genuinely $0, but their own docs
+say free capacity is limited and concurrency isn't guaranteed, and each key
+still carries RPM/TPM limits plus a monthly gateway quota — you trade a known
+limit for an unpredictable one. What they're actually good for is the thing a
+single vendor can't give you: a second provider to fail over to, and a way to
+try a model on a sentence like "wsg" before paying for it.
 
 The Worker URL is public by design, so keep this for testing unless you put
 Cloudflare Access in front of it.
@@ -710,6 +747,7 @@ src/detect/             when something is worth reacting to, and how angry
 src/llm/prompt.js       system prompt (cached) + per-event context
 src/llm/claude.js       the one API call, structured JSON out
 src/llm/gemini.js       the same contract against Gemini's REST API
+src/llm/openai-compatible.js  the same contract against any /chat/completions gateway
 src/knowledge.js        game facts you maintain, and permission to say "idk"
 src/brain.js            wires it together, emits 'say' / 'skip'
 src/bridge/server.js    localhost HTTP bridge

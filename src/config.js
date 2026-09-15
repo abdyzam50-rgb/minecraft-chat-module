@@ -16,8 +16,14 @@ export const DEFAULTS = {
   persona: 'snarky',
 
   llm: {
-    /** claude | gemini — see src/llm/. Both honour the same contract. */
+    /**
+     * claude | gemini | openai — all honour the same contract.
+     * "openai" is any OpenAI-shaped /chat/completions endpoint: TokenRouter,
+     * OpenRouter, Groq, a local Ollama. Set baseUrl and model with it.
+     */
     provider: 'claude',
+    /** Only for provider "openai". Defaults to OpenAI's own endpoint. */
+    baseUrl: '',
     /** Leave null to use the provider's default model. */
     model: null,
     /** Falls back to ANTHROPIC_API_KEY / GEMINI_API_KEY. */
@@ -279,6 +285,8 @@ function fromEnv(env) {
 const DEFAULT_MODELS = {
   claude: 'claude-opus-5',
   gemini: 'gemini-3.6-flash',
+  // No sensible default: it depends entirely on which gateway you point at.
+  openai: '',
 };
 
 /** Which provider a model id plainly belongs to, if it is obvious. */
@@ -308,8 +316,13 @@ export function resolveConfig(options = {}, env = process.env) {
   if (!['chill', 'snarky', 'unfiltered'].includes(config.persona)) {
     errors.push(`unknown persona "${config.persona}"`);
   }
-  if (!['claude', 'gemini'].includes(config.llm.provider)) {
-    errors.push(`unknown llm.provider "${config.llm.provider}" — use "claude" or "gemini"`);
+  if (!['claude', 'gemini', 'openai'].includes(config.llm.provider)) {
+    errors.push(
+      `unknown llm.provider "${config.llm.provider}" — use "claude", "gemini" or "openai"`,
+    );
+  }
+  if (config.llm.provider === 'openai' && !config.llm.model) {
+    errors.push('llm.model is required for provider "openai" — the gateway decides what is available');
   }
   if (!['clean', 'allow'].includes(config.chat.profanity)) {
     errors.push(`chat.profanity must be "clean" or "allow"`);
