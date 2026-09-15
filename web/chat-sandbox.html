@@ -405,12 +405,13 @@
     Standing in someone's face at a ghost spot is a macro check — they're watching whether you
     react like a person. So the reply escalates: a flat warning, then a colder one, then
     shouting, at block counts rolled per player (shown as <em>fuse</em> above) rather than a
-    fixed number. Every reply is written fresh by Claude on your own account — nothing here is
+    fixed number. <span id="whoWrites">Every reply is written fresh</span> &mdash; nothing here is
     a stored line, and a reply that comes back too close to something already said gets
     rewritten before it's sent, or dropped. Detection, escalation, name shortening, sanitising
     and the rate limiter are the real logic from <code>src/</code>. If live replies are
     unavailable the page falls back to the module's canned lines and says so above, and those
     do repeat.
+    <span id="chainNote"></span>
   </footer>
 </div>
 
@@ -963,6 +964,7 @@
         // Name the actual model, not the provider: the whole point of the page
         // is comparing how different ones write a two-word reply.
         upstreamName = String(status.model || status.provider || "the Worker").split("/").pop();
+        describeUpstream(status);
         setLive(true, "live · " + upstreamName);
         return;
       } catch (error) {
@@ -980,6 +982,8 @@
       sampleFn = null;
     }
     if (sampleFn) {
+      const who = el("whoWrites");
+      if (who) who.textContent = "Every reply is written fresh by Claude on your own account";
       setLive(true, "live · written fresh");
     } else {
       setLive(false, "offline · lines repeat");
@@ -1144,6 +1148,33 @@
         logEntry("skip", "live reply failed (" + ((error && error.code) || "unknown") + ")");
       }
       return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
+    }
+  }
+
+  /**
+   * Say what is really behind the page. The footer used to claim Claude on
+   * every deployment, which is only true inside an Artifact — the hosted site
+   * runs whichever model the Worker's chain resolves to, and that chain is
+   * the reason the page survives one of them going down.
+   */
+  function describeUpstream(status) {
+    const chain = (status && status.chain) || [];
+    // A rung is "provider:model-id", and an id can itself contain a colon —
+    // "nvidia/nemotron-...:free" — so cut at the FIRST colon only, or the
+    // whole model renders as the word "free".
+    const names = chain.map(function (rung) {
+      const id = rung.slice(rung.indexOf(":") + 1);
+      return id.split("/").pop().replace(/:free$/, "");
+    });
+    const who = el("whoWrites");
+    if (who) {
+      who.textContent = "Every reply is written fresh by " + upstreamName;
+    }
+    const note = el("chainNote");
+    if (note && names.length > 1) {
+      note.textContent =
+        " Replies come from the first of these that is free: " + names.join(", ") +
+        ". Free capacity is shared and runs out at different moments, so the list is what keeps the page answering.";
     }
   }
 
