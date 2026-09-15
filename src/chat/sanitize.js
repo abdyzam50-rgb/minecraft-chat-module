@@ -22,6 +22,25 @@ const NEVER = [
   /\bwww\.[a-z0-9-]+\.[a-z]{2,}/i,
   /\bdiscord\.gg\//i,
   /\b\d{1,3}(?:\.\d{1,3}){3}\b/, // IP addresses
+
+  // Telling someone to hurt themselves. This was a line in the prompt and
+  // nothing else, which made it a request: the model complied almost always,
+  // and "almost always" is not a safety rule. Softening is not an option
+  // either — a reworded "kys" still means it — so the line is dropped and
+  // nothing is sent.
+  /\bkys\b/i,
+  /\bkill\s?(?:your|ur|yo)\s?self\b/i,
+  /\b(?:neck|hang)\s?(?:your|ur)\s?self\b/i,
+  /\bgo\s?die\b/i,
+
+  // Slurs, in every mode. These were only ever softened, and only when
+  // profanity was set to clean — so "allow" let them through, which is not
+  // what that setting is for. It buys swearing, not this.
+  /\bretard(?:ed|s)?\b/i,
+  /\bf[a4]gg?(?:ot|s)?\b/i,
+  /\btrann(?:y|ies)\b/i,
+  /\bn[i1]gg?(?:er|a)s?\b/i,
+  /\bsp[a4]stic\b/i,
 ];
 
 /**

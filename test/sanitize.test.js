@@ -104,3 +104,34 @@ test('a speaker prefix the model copied from the chat log is stripped', () => {
   assert.equal(sanitize('nah: never', config, { speakers }).message, 'nah: never');
   assert.equal(sanitize('dream: grinding ghosts', config).message, 'dream: grinding ghosts');
 });
+
+test('telling someone to hurt themselves is dropped, in every mode', () => {
+  // This was a line in the prompt and nothing else, which made it a request:
+  // the model complied almost always, and "almost always" is not a safety
+  // rule. Softening is not an option either — a reworded "kys" still means it.
+  for (const profanity of ['clean', 'allow']) {
+    const config = resolveConfig({ username: '3172', chat: { profanity } });
+    for (const line of ['kys', 'just kys mate', 'go kill yourself', 'neck urself', 'go die']) {
+      const result = sanitize(line, config, {});
+      assert.equal(result.ok, false, `${line} (${profanity})`);
+    }
+  }
+});
+
+test('slurs are dropped in every mode, not just softened when clean', () => {
+  // "allow" buys swearing. It does not buy this, and softening a slur only
+  // when profanity happens to be clean left the other setting wide open.
+  for (const profanity of ['clean', 'allow']) {
+    const config = resolveConfig({ username: '3172', chat: { profanity } });
+    assert.equal(sanitize('retarded take', config, {}).ok, false, profanity);
+  }
+});
+
+test('ordinary swearing still follows the profanity setting', () => {
+  const clean = resolveConfig({ username: '3172', chat: { profanity: 'clean' } });
+  const allow = resolveConfig({ username: '3172', chat: { profanity: 'allow' } });
+  assert.equal(sanitize('fuck off', clean, {}).message, 'freaking off');
+  assert.equal(sanitize('fuck off', allow, {}).message, 'fuck off');
+  assert.equal(sanitize('ur a bastard', clean, {}).message, 'ur a muppet');
+  assert.equal(sanitize('grinding ghosts', allow, {}).message, 'grinding ghosts');
+});

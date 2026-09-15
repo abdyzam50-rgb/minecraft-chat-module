@@ -795,9 +795,34 @@
 
   const SOFTEN = [
     [/\bfuck(?:ing|ed|er|s)?\b/gi, "freaking"], [/\bshit(?:ty|s)?\b/gi, "rubbish"],
-    [/\bbitch(?:es)?\b/gi, "clown"], [/\bdip\s?shit\b/gi, "genius"],
+    [/\bbitch(?:es)?\b/gi, "clown"], [/\bcunt\b/gi, "clown"], [/\bdip\s?shit\b/gi, "genius"],
     [/\bass(?:hole)?\b/gi, "muppet"], [/\bdick(?:head)?\b/gi, "muppet"],
+    [/\bbastard\b/gi, "muppet"],
     [/\bdamn\b/gi, "darn"], [/\bhell\b/gi, "heck"], [/\bpiss\s?off\b/gi, "buzz off"],
+  ];
+
+  /**
+   * Dropped outright in every mode, matching src/chat/sanitize.js.
+   *
+   * Telling someone to hurt themselves was a line in the prompt and nothing
+   * else, which made it a request rather than a rule. Softening is not an
+   * option — a reworded "kys" still means it — so the line is dropped and
+   * nothing is sent. Slurs go the same way: "allow" buys swearing, not this.
+   */
+  const NEVER = [
+    /https?:\/\//i,
+    /\bwww\.[a-z0-9-]+\.[a-z]{2,}/i,
+    /\bdiscord\.gg\//i,
+    /\b\d{1,3}(?:\.\d{1,3}){3}\b/,
+    /\bkys\b/i,
+    /\bkill\s?(?:your|ur|yo)\s?self\b/i,
+    /\b(?:neck|hang)\s?(?:your|ur)\s?self\b/i,
+    /\bgo\s?die\b/i,
+    /\bretard(?:ed|s)?\b/i,
+    /\bf[a4]gg?(?:ot|s)?\b/i,
+    /\btrann(?:y|ies)\b/i,
+    /\bn[i1]gg?(?:er|a)s?\b/i,
+    /\bsp[a4]stic\b/i,
   ];
 
   /** Words that cannot end a line — they are always reaching for the next one. */
@@ -806,7 +831,7 @@
   function sanitize(raw, shout, terse, speakers) {
     let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
     if (!text) return null;
-    if (/https?:\/\/|discord\.gg\//i.test(text)) return null;
+    if (NEVER.some(function (pattern) { return pattern.test(text); })) return null;
 
     // Reported: "dream: grinding ghosts". Shown chat lines as context, the
     // model sometimes writes one back with the speaker prefix still attached.
