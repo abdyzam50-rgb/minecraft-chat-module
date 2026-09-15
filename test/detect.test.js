@@ -493,3 +493,33 @@ test('the prompt tells a greeting to greet back, and says what not to reach for'
   assert.match(called, /called your name and said nothing else/i);
   assert.ok(!/greeted you/i.test(called), 'a bare name call still wants "?"');
 });
+
+test('a question about you is not a question about the grind', () => {
+  // Reported: "yo" / "yo" went fine, then "hows ur day?" came back as
+  // "dream: grinding ghosts, np". They asked after the player, not the
+  // pathfinder, and answering with the grind is a script following a topic
+  // rather than a person listening.
+  const config = resolveConfig({ username: '3172' });
+  const store = new ContextStore(config, () => NOW);
+  store.updateNearby([{ name: 'xX_DreamSlayer_Xx', distance: 3.2 }], NOW);
+
+  const asked = (content, ts) =>
+    detectFromChat(
+      store,
+      config,
+      store.addChat({ sender: 'xX_DreamSlayer_Xx', content, channel: 'all', ts }),
+      ts,
+    );
+
+  for (const [i, line] of ['hows ur day 3172?', 'how are you 3172', 'hru 3172', 'you good 3172?'].entries()) {
+    const trigger = asked(line, NOW + i * 1000);
+    assert.ok(trigger, `${line} deserves an answer`);
+    assert.equal(trigger.askedWellbeing, true, line);
+    assert.equal(trigger.askedActivity, false, `${line} is not asking about the grind`);
+  }
+
+  // And the grind question still reads as one.
+  const activity = asked('what you upto 3172', NOW + 9000);
+  assert.equal(activity.askedActivity, true);
+  assert.equal(activity.askedWellbeing, false);
+});

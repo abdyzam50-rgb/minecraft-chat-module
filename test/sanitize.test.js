@@ -88,3 +88,19 @@ test('trimming to a word count never leaves half a clause', () => {
   assert.equal(sanitize('?', config, { maxWords: 2 }).message, '?');
   assert.equal(sanitize('yo wsg', config, { maxWords: 2 }).message, 'yo wsg');
 });
+
+test('a speaker prefix the model copied from the chat log is stripped', () => {
+  // Observed live: "dream: grinding ghosts". The server adds "3172: " in
+  // game, so typing a prefix produces "3172: dream: grinding ghosts".
+  const config = resolveConfig({ username: '3172' });
+  const speakers = ['3172', 'xX_DreamSlayer_Xx', 'dream'];
+  assert.equal(sanitize('dream: grinding ghosts', config, { speakers }).message, 'grinding ghosts');
+  assert.equal(sanitize('xX_DreamSlayer_Xx: yo', config, { speakers }).message, 'yo');
+  assert.equal(sanitize('3172: yo', config, { speakers }).message, 'yo');
+
+  // Only names from this exchange count. Times, ratios and ordinary colons are
+  // things people type, and a blanket "word colon" rule would eat them.
+  assert.equal(sanitize('8:30 works', config, { speakers }).message, '8:30 works');
+  assert.equal(sanitize('nah: never', config, { speakers }).message, 'nah: never');
+  assert.equal(sanitize('dream: grinding ghosts', config).message, 'dream: grinding ghosts');
+});

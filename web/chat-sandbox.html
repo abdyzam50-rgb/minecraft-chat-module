@@ -555,6 +555,8 @@
     return words.length > 0 && words.every(function (w) { return FILLER_WORDS.indexOf(w) !== -1; });
   }
 
+  // "hows ur day", "u good?", "hru" — asking after you, not after the grind.
+  const WELLBEING_QUESTION = /\bhru\b|\bhow(?:'?s|s| is| are| r)?\s+(?:you|u|ur|your)\b[^?]{0,12}\b(?:day|doing|going|been|feeling)?\b|\bhows?\s+(?:it|life|things|everything)\s*(?:going)?\b|\b(?:you|u)\s+(?:good|ok|okay|alright|aight|str8|straight)\b|\bhow\s+(?:you|u)\s+doing\b/i;
   const ACTIVITY_QUESTION = /\bwyd\b|\bwhat\b[^?]{0,20}\b(?:you|u|ur)\b[^?]{0,20}\b(?:doing|do|upto|up\s?to|on|grinding|farming)\b|\bwhat\s?(?:you|u)\s?(?:up\s?to|on)\b|\bhows?\s+the\s+(?:grind|farm)\b/i;
   const PRAISE = /\b(?:rich|wealthy|loaded|cracked|goated|insane|op|pro|beast|godly|impressive|sick|nuts|mental|fire|sweaty|efficient|quick|fast|grinder)\b|\b(?:really|so|very|pretty|mad|well|proper)\s+good\b|\bgood\s+at\b/i;
 
@@ -715,10 +717,22 @@
     [/\bdamn\b/gi, "darn"], [/\bhell\b/gi, "heck"], [/\bpiss\s?off\b/gi, "buzz off"],
   ];
 
-  function sanitize(raw, shout, terse) {
+  function sanitize(raw, shout, terse, speakers) {
     let text = String(raw || "").replace(/[\r\n\t]+/g, " ").trim().replace(/^[/\\]+/, "").trim();
     if (!text) return null;
     if (/https?:\/\/|discord\.gg\//i.test(text)) return null;
+
+    // Reported: "dream: grinding ghosts". Shown chat lines as context, the
+    // model sometimes writes one back with the speaker prefix still attached.
+    // In game the server adds that prefix, so typing it gives "3172: dream:
+    // ...". Only names from this exchange count — a blanket "word colon" rule
+    // would also eat "nah: never" and "8:30 works".
+    (speakers || []).forEach(function (speaker) {
+      if (!speaker) return;
+      const esc = String(speaker).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      text = text.replace(new RegExp("^" + esc + "\\s*:\\s+(?=\\S)", "i"), "").trim();
+    });
+    if (!text) return null;
     for (const [p, r] of CORRECTIONS) text = text.replace(p, r);
     if (state.profanity === "clean") for (const [p, r] of SOFTEN) text = text.replace(p, r);
     if (terse) {
@@ -1057,6 +1071,9 @@
         ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
         : "",
       trigger.askedActivity ? "They asked what you are doing — say it: you are grinding ghosts." : "",
+      trigger.askedWellbeing
+        ? 'They asked how you are, not what you are doing. Answer that: "im good", "yeah good", "not bad", "cant complain", "tired ngl". Do not tell them about the grind unless they ask about it. This is the place where asking back is natural — "hbu", "wbu", "u?" — and it is what anyone would type here. One short line, both halves.'
+        : "",
       trigger.smalltalk
         ? 'That is an acknowledgement, not a question — they are wrapping up. Match it: one or two words at most. "all g", "np", "cool", "yh". Do not restate what you are doing or start a new topic. Saying nothing at all is an entirely normal reply here — set respond to false if the exchange has simply finished.'
         : "",
@@ -1112,7 +1129,7 @@
         // trying to judge which one writes better.
         return {
           source: modelLabel(reply),
-          message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)),
+          message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger), speakersFor(trigger)),
           reason: reply.reason,
         };
       } catch (error) {
@@ -1129,17 +1146,17 @@
           setLive(true, "live · one reply came from canned lines");
           return {
             source: "canned",
-            message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)),
+            message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)),
             reason: "upstream busy",
           };
         }
         logEntry("skip", upstreamName + " failed — canned lines from here: " + shortenError(error.message));
         workerApiUrl = "";
         setLive(false, "offline · lines repeat");
-        return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
+        return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)) };
       }
     }
-    if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
+    if (!sampleFn) return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)) };
     try {
       const reply = await sampleFn.json(buildPrompt(trigger, avoid, rejected), {
         modelTier: "quick",
@@ -1148,7 +1165,7 @@
       if (!reply || reply.respond === false || !reply.message) {
         return { source: "claude", message: null, reason: (reply && reply.reason) || "chose to stay quiet" };
       }
-      return { source: "claude", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger)), reason: reply.reason };
+      return { source: "claude", message: sanitize(reply.message, shoutFor(trigger), terseFor(trigger), speakersFor(trigger)), reason: reply.reason };
     } catch (error) {
       if (error && error.code === "not_granted") {
         setLive(false, "offline · lines repeat");
@@ -1160,7 +1177,7 @@
       } else {
         logEntry("skip", "live reply failed (" + ((error && error.code) || "unknown") + ")");
       }
-      return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger)) };
+      return { source: "canned", message: sanitize(fallbackLine(trigger), shoutFor(trigger), terseFor(trigger), speakersFor(trigger)) };
     }
   }
 
@@ -1214,6 +1231,11 @@
     const line = String(message || "").split("\n")[0].trim();
     if (line.length <= 140) return line;
     return line.slice(0, 140).replace(/[\s(,;:-]+\S*$/, "") + "…";
+  }
+
+  /** Names that could turn up as a copied "name: " prefix on a reply. */
+  function speakersFor(trigger) {
+    return [SELF, shortName(SELF), trigger.subject, shortName(trigger.subject || "")].filter(Boolean);
   }
 
   function shoutFor(trigger) {
@@ -1423,7 +1445,8 @@
       return respond({
         kind: "mention", subject: player.name, channel, conversational: true,
         opener: opener, greeting: greeting, smalltalk: smalltalk, compliment: compliment,
-        askedActivity: ACTIVITY_QUESTION.test(text),
+        askedActivity: ACTIVITY_QUESTION.test(text) && !WELLBEING_QUESTION.test(text),
+        askedWellbeing: WELLBEING_QUESTION.test(text),
         evidence: opener
           ? shortName(player.name) + " just called my name, nothing else in it"
           : smalltalk

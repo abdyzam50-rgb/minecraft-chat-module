@@ -173,6 +173,18 @@ export const SHORT_QUESTION = /^(?:wyd|wbu|hbu|wu|hru|u\s?(?:good|ok|gud)|ya\s?g
 export const ACTIVITY_QUESTION =
   /\bwyd\b|\bwhat\b[^?]{0,20}\b(?:you|u|ur)\b[^?]{0,20}\b(?:doing|do|upto|up\s?to|on|grinding|farming)\b|\bwhat\s?(?:you|u)\s?(?:up\s?to|on)\b|\bhows?\s+the\s+(?:grind|farm)\b/i;
 
+/**
+ * "hows ur day", "u good?", "hru" — asking after you, not after the grind.
+ *
+ * Reported: "hows ur day?" was answered with "grinding ghosts". Both are
+ * questions and both deserve an answer, but only one of them is about ghosts,
+ * and replying with the grind to a question about your day is the kind of
+ * miss that reads as a script following a topic rather than a person
+ * listening.
+ */
+export const WELLBEING_QUESTION =
+  /\bhru\b|\bhow(?:'?s|s| is| are| r)?\s+(?:you|u|ur|your)\b[^?]{0,12}\b(?:day|doing|going|been|feeling)?\b|\bhows?\s+(?:it|life|things|everything)\s*(?:going)?\b|\b(?:you|u)\s+(?:good|ok|okay|alright|aight|str8|straight)\b|\bhow\s+(?:you|u)\s+doing\b/i;
+
 /** Praise, rather than a question or a charge. */
 const PRAISE =
   /\b(?:rich|wealthy|loaded|cracked|goated|insane|op|pro|beast|godly|impressive|sick|nuts|mental|fire|sweaty|efficient|quick|fast|grinder)\b|\b(?:really|so|very|pretty|mad|well|proper)\s+good\b|\bgood\s+at\b/i;

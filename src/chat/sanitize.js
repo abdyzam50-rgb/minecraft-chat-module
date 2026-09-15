@@ -29,7 +29,7 @@ const NEVER = [
  *
  * @param {string} raw
  * @param {object} config
- * @param {{shout?: boolean, maxWords?: number, stripNames?: string[]}} [options]
+ * @param {{shout?: boolean, maxWords?: number, stripNames?: string[], speakers?: string[]}} [options]
  *   shout uppercases the line last, after profanity softening, so "fuck off"
  *   still becomes "FREAKING OFF" and not a shouted swear you didn't ask for.
  *   maxWords and stripNames enforce brevity on replies that must be tiny —
@@ -43,6 +43,22 @@ export function sanitize(raw, config, options = {}) {
 
   // Strip surrounding quotes the model sometimes adds.
   text = text.replace(/^["'`](.*)["'`]$/s, '$1').trim();
+
+  // Reported: "dream: grinding ghosts". Shown chat lines as context, the model
+  // sometimes writes one back, speaker prefix and all. In game that prefix is
+  // added by the server, so typing it produces "3172: dream: ...".
+  //
+  // Only a name from this exchange counts. A blanket "word colon" rule would
+  // also eat "nah: never" and "8:30 works", which are things people type.
+  for (const speaker of options.speakers ?? []) {
+    if (!speaker) continue;
+    const escaped = String(speaker).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prefix = new RegExp(`^${escaped}\\s*:\\s+(?=\\S)`, 'i');
+    if (prefix.test(text)) {
+      text = text.replace(prefix, '').trim();
+      break;
+    }
+  }
 
   // A leading slash would execute a command instead of sending a message.
   text = text.replace(/^[/\\]+/, '').trim();

@@ -152,7 +152,16 @@ export class ChatAI extends EventEmitter {
       return null;
     }
 
-    let clean = sanitize(decision.message, this.config, { shout, ...terse });
+    // Whose names could show up as a copied "name: " prefix on the reply.
+    const short = (name) => shortName(name ?? '', { overrides: this.config.shortNames });
+    const speakers = [
+      this.config.username,
+      short(this.config.username),
+      trigger.subject,
+      short(trigger.subject),
+    ].filter(Boolean);
+
+    let clean = sanitize(decision.message, this.config, { shout, speakers, ...terse });
     if (!clean.ok) {
       this.emit('skip', { trigger, reason: `blocked: ${clean.reason}` });
       return null;
@@ -166,7 +175,7 @@ export class ChatAI extends EventEmitter {
       this.emit('skip', { trigger, reason: `${final.reason} — rewriting` });
       const retry = await this.think(trigger, ts, { avoid, nameFatigue, rejected: clean.message });
       if (retry?.respond && retry.message) {
-        const retryClean = sanitize(retry.message, this.config, { shout, ...terse });
+        const retryClean = sanitize(retry.message, this.config, { shout, speakers, ...terse });
         if (retryClean.ok) {
           const retryCheck = this.policy.check(trigger, retryClean.message);
           if (retryCheck.allowed) {

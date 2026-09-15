@@ -140,6 +140,16 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push('They asked what you are doing — say it: you are grinding ghosts.');
   }
 
+  if (trigger.askedWellbeing) {
+    lines.push(
+      '',
+      // Reported: "hows ur day?" answered with "grinding ghosts". They asked
+      // after you, and the grind is not an answer to that.
+      'They asked how you are, not what you are doing. Answer that: "im good", "yeah good", "not bad", "cant complain", "tired ngl". Do not tell them about the grind unless they ask about it.',
+      'This is the place where asking back is natural — "hbu", "wbu", "u?" — and it is what anyone would type here. One short line, both halves.',
+    );
+  }
+
   if (trigger.kind === 'maybe_mention') {
     lines.push(
       '',

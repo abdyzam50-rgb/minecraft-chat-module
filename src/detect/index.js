@@ -4,6 +4,7 @@ import {
   accusationTarget,
   AGGRESSIVE,
   ACTIVITY_QUESTION,
+  WELLBEING_QUESTION,
   CONFIRMATION,
   DENIAL,
   isCompliment,
@@ -371,6 +372,9 @@ export function detectMention(store, config, message, ts = Date.now()) {
   const smalltalk = !opener && isSmallTalk(remainder);
   const compliment = !opener && !smalltalk && isCompliment(message.content, named);
   const askedActivity = ACTIVITY_QUESTION.test(message.content);
+  // "hows ur day" is not "wyd". Asked together, the personal one wins: they
+  // asked after you, and the grind is not an answer to that.
+  const askedWellbeing = WELLBEING_QUESTION.test(message.content);
 
   // Nothing left once the name is gone and it is not a greeting — nothing to
   // answer. (A short message is not the same as an empty one: "wsg" and "idk"
@@ -386,7 +390,8 @@ export function detectMention(store, config, message, ts = Date.now()) {
     opener,
     smalltalk,
     compliment,
-    askedActivity,
+    askedActivity: askedActivity && !askedWellbeing,
+    askedWellbeing,
     evidence: opener
       ? `${message.sender} just called my name — "${message.content}" — nothing else in it.`
       : smalltalk
