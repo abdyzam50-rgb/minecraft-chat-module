@@ -12,11 +12,15 @@
   // Set it to "gemini" to fall back to GEMINI_MODEL and GEMINI_API_KEY.
   //
   // Free models here are capped at 20 requests a minute and 50 a day, or
-  // 1000 a day once the account has ever bought $10 of credits.
+  // 1000 a day once the account has ever bought $10 of credits — and the
+  // shared free pools return 429 "Provider returned error" whenever they are
+  // saturated, which is often. OPENAI_MODEL is therefore a list: the first
+  // model that is not busy answers. Order it by how well each one writes a
+  // two-word chat reply, not by size.
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
     "LLM_PROVIDER": "openai",
     "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
-    "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free"
+    "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free, google/gemma-4-31b-it:free, nex-agi/nex-n2.5-mini:free, inclusionai/ling-3.0-flash-vl:free, liquid/lfm-2.5-2.6b:free"
   }
 }

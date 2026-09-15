@@ -62,10 +62,23 @@ function keyFor(env, provider) {
   return provider === 'openai' ? gatewayKey(env) : env.GEMINI_API_KEY;
 }
 
-function modelFor(env, provider) {
-  return provider === 'openai'
-    ? env.OPENAI_MODEL || 'z-ai/glm-5.3-free'
-    : env.GEMINI_MODEL || 'gemini-3.6-flash';
+/**
+ * Models to try, in order. Free pools are shared and saturate constantly — a
+ * single free model answers 429 "Provider returned error" for minutes at a
+ * time — so OPENAI_MODEL takes a comma-separated list and the first one that
+ * is not busy answers. Gemini has no such list; it is one model or nothing.
+ */
+function modelsFor(env, provider) {
+  if (provider !== 'openai') return [env.GEMINI_MODEL || 'gemini-3.6-flash'];
+  return (env.OPENAI_MODEL || 'google/gemma-4-26b-a4b-it:free')
+    .split(',')
+    .map((model) => model.trim())
+    .filter(Boolean);
+}
+
+/** True for the errors worth trying the next model over: busy, not broken. */
+function isBusy(status) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
 /** Keeps the API key on Cloudflare; the static site sends only a prompt. */
@@ -76,13 +89,17 @@ export default {
     const url = new URL(request.url);
     const provider = pickProvider(env);
     const key = keyFor(env, provider);
-    const model = modelFor(env, provider);
+    const models = modelsFor(env, provider);
 
     if (request.method === 'OPTIONS') return new Response(null, { headers });
     if (request.method === 'GET' && url.pathname === '/health') {
       // The model and provider are in here because the commonest failure is a
       // deploy pointing at something other than what you think it is.
-      return json({ ok: true, keyConfigured: Boolean(key), provider, model }, 200, headers);
+      return json(
+        { ok: true, keyConfigured: Boolean(key), provider, model: models[0], models },
+        200,
+        headers,
+      );
     }
     if (request.method !== 'POST' || url.pathname !== '/api/reply') {
       return json({ error: 'not found' }, 404, headers);
@@ -105,8 +122,8 @@ export default {
 
     try {
       const reply = provider === 'openai'
-        ? await replyFromOpenAI(env, model, key, prompt)
-        : await replyFromGemini(env, model, key, prompt);
+        ? await replyFromOpenAI(env, models, key, prompt)
+        : await replyFromGemini(env, models[0], key, prompt);
       return json(reply, 200, headers);
     } catch (error) {
       // The upstream's own message names the real problem — a retired model, a
@@ -146,32 +163,52 @@ async function replyFromGemini(env, model, key, prompt) {
   return reply;
 }
 
-async function replyFromOpenAI(env, model, key, prompt) {
+async function replyFromOpenAI(env, models, key, prompt) {
   const baseUrl = (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+  const busy = [];
 
-  // Structured-output support varies wildly between models behind these
-  // gateways. A model that rejects the schema usually still honours
-  // json_object, so drop to that once rather than failing the reply.
-  let response = await callOpenAI(baseUrl, model, key, prompt, true);
-  if (!response.ok && response.status === 400) {
-    const detail = await errorMessage(response);
-    if (/schema|response_format|json/i.test(detail)) {
-      console.warn(`${model} rejected json_schema, retrying as json_object`);
-      response = await callOpenAI(baseUrl, model, key, prompt, false);
-    } else {
-      throw new Error(`${model} 400: ${detail}`);
+  for (const model of models) {
+    // Structured-output support varies wildly between models behind these
+    // gateways. A model that rejects the schema usually still honours
+    // json_object, so drop to that once rather than failing the reply.
+    let response = await callOpenAI(baseUrl, model, key, prompt, true);
+    if (!response.ok && response.status === 400) {
+      const detail = await errorMessage(response);
+      if (/schema|response_format|json/i.test(detail)) {
+        console.warn(`${model} rejected json_schema, retrying as json_object`);
+        response = await callOpenAI(baseUrl, model, key, prompt, false);
+      } else {
+        throw new Error(`${model} 400: ${detail}`);
+      }
     }
+
+    if (!response.ok) {
+      const detail = await errorMessage(response);
+      // A busy free pool is the next model's problem, not the caller's. A
+      // refusal — bad key, unknown model — is the same at every model, so
+      // surface it rather than working through the list to say so slower.
+      if (isBusy(response.status) && model !== models[models.length - 1]) {
+        console.warn(`${model} is busy (${response.status}), trying the next model`);
+        busy.push(`${model} ${response.status}`);
+        continue;
+      }
+      const tried = busy.length ? ` (after ${busy.join(', ')})` : '';
+      throw new Error(`${model} ${response.status}: ${detail}${tried}`);
+    }
+
+    const completion = await response.json();
+    const choice = completion.choices?.[0];
+    const text = choice?.message?.content || '';
+    if (!text) throw new Error(`${model} returned nothing (${choice?.finish_reason || 'no choice'})`);
+
+    const reply = parseReply(text.replace(THINK_BLOCK, '').trim());
+    if (!reply) throw new Error(`${model} returned unparseable JSON`);
+    // Which model actually answered, because with a fallback list the one in
+    // /health is only the first choice.
+    return { ...reply, model };
   }
-  if (!response.ok) throw new Error(`${model} ${response.status}: ${await errorMessage(response)}`);
 
-  const completion = await response.json();
-  const choice = completion.choices?.[0];
-  const text = choice?.message?.content || '';
-  if (!text) throw new Error(`${model} returned nothing (${choice?.finish_reason || 'no choice'})`);
-
-  const reply = parseReply(text.replace(THINK_BLOCK, '').trim());
-  if (!reply) throw new Error(`${model} returned unparseable JSON`);
-  return reply;
+  throw new Error(`every model was busy (${busy.join(', ')})`);
 }
 
 function callGemini(model, key, prompt, thinkingConfig) {
