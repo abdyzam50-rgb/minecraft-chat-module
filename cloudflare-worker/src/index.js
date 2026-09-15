@@ -77,6 +77,52 @@ function keyShape(env) {
 }
 
 /**
+ * The OpenAI-shaped gateways this Worker knows, each with its own base URL,
+ * key and model list.
+ *
+ * One gateway is not enough. Every free tier is contended by everyone else
+ * using it, and they run dry at different moments, so the useful unit is a
+ * list of independent services rather than a list of models inside one.
+ * Whichever has a key configured joins the chain; the rest cost nothing.
+ */
+function gateways(env) {
+  const list = [];
+  const shared = gatewayKey(env);
+  if (shared) {
+    list.push({
+      name: gatewayKeyName(env),
+      baseUrl: (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, ''),
+      key: shared,
+      models: splitModels(env.OPENAI_MODEL || 'google/gemma-4-26b-a4b-it:free'),
+    });
+  }
+  // Groq and Cerebras both run open models on their own fast hardware with a
+  // free tier, and both speak this wire format, so each costs one secret and
+  // no code. They are independent of the routers above, which is the point.
+  if ((env.GROQ_API_KEY || '').trim()) {
+    list.push({
+      name: 'GROQ_API_KEY',
+      baseUrl: (env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
+      key: env.GROQ_API_KEY.trim(),
+      models: splitModels(env.GROQ_MODEL || 'llama-3.3-70b-versatile'),
+    });
+  }
+  if ((env.CEREBRAS_API_KEY || '').trim()) {
+    list.push({
+      name: 'CEREBRAS_API_KEY',
+      baseUrl: (env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1').replace(/\/$/, ''),
+      key: env.CEREBRAS_API_KEY.trim(),
+      models: splitModels(env.CEREBRAS_MODEL || 'llama-3.3-70b'),
+    });
+  }
+  return list;
+}
+
+function splitModels(value) {
+  return value.split(',').map((model) => model.trim()).filter(Boolean);
+}
+
+/**
  * Which upstream to call. Explicit LLM_PROVIDER wins; otherwise whichever key
  * is configured, preferring Gemini so an existing deploy keeps behaving the
  * same after this change.
@@ -90,38 +136,32 @@ function pickProvider(env) {
 }
 
 /**
- * Everything worth trying, in order, across both providers.
+ * Everything worth trying, in order, across every provider that has a key.
  *
- * A quota is not a property of the request — it is a property of one account
- * on one day. Falling back only between models of the same provider leaves the
- * page dead the moment that provider says no, which is exactly what a free
- * Gemini key does after twenty requests. LLM_PROVIDER picks what goes first;
- * whatever else has a key goes after it.
+ * A quota belongs to one account on one day, not to the request, so falling
+ * back only between models of one provider leaves the page dead the moment
+ * that provider says no. LLM_PROVIDER picks what goes first.
  */
 function attemptsFor(env) {
   const preferred = pickProvider(env);
   const gemini = env.GEMINI_API_KEY
-    ? [{ provider: 'gemini', model: env.GEMINI_MODEL || 'gemini-3.6-flash', key: env.GEMINI_API_KEY }]
+    ? [{
+        provider: 'gemini',
+        gateway: 'GEMINI_API_KEY',
+        model: env.GEMINI_MODEL || 'gemini-3.6-flash',
+        key: env.GEMINI_API_KEY.trim(),
+      }]
     : [];
-  const key = gatewayKey(env);
-  const openai = key
-    ? modelsFor(env, 'openai').map((model) => ({ provider: 'openai', model, key }))
-    : [];
-  return preferred === 'openai' ? [...openai, ...gemini] : [...gemini, ...openai];
-}
-
-/**
- * Models to try, in order. Free pools are shared and saturate constantly — a
- * single free model answers 429 "Provider returned error" for minutes at a
- * time — so OPENAI_MODEL takes a comma-separated list and the first one that
- * is not busy answers. Gemini has no such list; it is one model or nothing.
- */
-function modelsFor(env, provider) {
-  if (provider !== 'openai') return [env.GEMINI_MODEL || 'gemini-3.6-flash'];
-  return (env.OPENAI_MODEL || 'google/gemma-4-26b-a4b-it:free')
-    .split(',')
-    .map((model) => model.trim())
-    .filter(Boolean);
+  const rest = gateways(env).flatMap((gateway) =>
+    gateway.models.map((model) => ({
+      provider: 'openai',
+      gateway: gateway.name,
+      baseUrl: gateway.baseUrl,
+      model,
+      key: gateway.key,
+    })),
+  );
+  return preferred === 'openai' ? [...rest, ...gemini] : [...gemini, ...rest];
 }
 
 /**
@@ -165,31 +205,44 @@ export default {
     // information, and guessing ids from a screenshot is how an hour goes
     // into a 401 that turns out to name a model the gateway never had.
     if (request.method === 'GET' && url.pathname === '/models') {
-      const key = gatewayKey(env);
-      if (!key) return json({ error: 'no gateway key configured' }, 500, headers);
-      const base = openaiBaseUrl(env);
-      try {
-        const upstream = await fetch(`${base}/models`, {
-          signal: AbortSignal.timeout(PER_MODEL_MS),
-          headers: { authorization: `Bearer ${key}` },
-        });
-        if (!upstream.ok) {
-          return json(
-            { baseUrl: base, status: upstream.status, error: await errorMessage(upstream) },
-            200,
-            headers,
-          );
-        }
-        const body = await upstream.json();
-        const ids = (body.data ?? []).map((model) => model.id);
-        return json(
-          { baseUrl: base, count: ids.length, free: ids.filter(isFreeId), all: ids },
-          200,
-          headers,
-        );
-      } catch (error) {
-        return json({ baseUrl: base, error: error.message }, 200, headers);
+      const all = gateways(env);
+      if (!all.length) return json({ error: 'no gateway key configured' }, 500, headers);
+      // ?gateway=GROQ_API_KEY picks one; without it, every configured gateway
+      // is listed, which is what you want right after adding a key.
+      const wanted = url.searchParams.get('gateway');
+      const chosen = wanted ? all.filter((gateway) => gateway.name === wanted) : all;
+      if (!chosen.length) {
+        return json({ error: `no gateway named ${wanted}`, configured: all.map((g) => g.name) }, 404, headers);
       }
+
+      const results = await Promise.all(chosen.map(async (gateway) => {
+        try {
+          const upstream = await fetch(`${gateway.baseUrl}/models`, {
+            signal: AbortSignal.timeout(PER_MODEL_MS),
+            headers: { authorization: `Bearer ${gateway.key}` },
+          });
+          if (!upstream.ok) {
+            return {
+              gateway: gateway.name,
+              baseUrl: gateway.baseUrl,
+              status: upstream.status,
+              error: await errorMessage(upstream),
+            };
+          }
+          const body = await upstream.json();
+          const ids = (body.data ?? []).map((model) => model.id);
+          return {
+            gateway: gateway.name,
+            baseUrl: gateway.baseUrl,
+            count: ids.length,
+            free: ids.filter(isFreeId),
+            all: ids,
+          };
+        } catch (error) {
+          return { gateway: gateway.name, baseUrl: gateway.baseUrl, error: error.message };
+        }
+      }));
+      return json({ gateways: results }, 200, headers);
     }
 
     if (request.method !== 'POST' || url.pathname !== '/api/reply') {
@@ -249,15 +302,15 @@ async function replyFromAny(env, attempts, prompt) {
 
     for (const attempt of attempts) {
       if (Date.now() >= deadline) break;
-      if (refused.has(attempt.provider)) continue;
+      if (refused.has(attempt.gateway)) continue;
       try {
         const reply = attempt.provider === 'gemini'
           ? await replyFromGemini(env, attempt.model, attempt.key, prompt)
-          : await tryModel(openaiBaseUrl(env), attempt.model, attempt.key, prompt);
+          : await tryModel(attempt.baseUrl, attempt.model, attempt.key, prompt);
         // Which one answered: with a chain, /health only names the first.
         return { ...reply, model: attempt.model, provider: attempt.provider };
       } catch (error) {
-        if (error.fatal) refused.add(attempt.provider);
+        if (error.fatal) refused.add(attempt.gateway);
         console.warn(`${attempt.provider}:${attempt.model} ${error.message}`);
         // Only the last word from each model, or one failing twice fills the
         // error with the same sentence written out again.
@@ -279,10 +332,6 @@ function geminiError(status, detail) {
 /** Gateways mark free variants as either "…:free" or "…-free". */
 function isFreeId(id) {
   return /[-:]free$/i.test(id);
-}
-
-function openaiBaseUrl(env) {
-  return (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
 }
 
 async function replyFromGemini(env, model, key, prompt) {

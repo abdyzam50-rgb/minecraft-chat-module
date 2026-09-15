@@ -89,6 +89,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
         run: |
           # Whichever are configured. Setting both is fine and makes switching
           # provider a wrangler.jsonc edit rather than a secrets change.
@@ -102,6 +104,14 @@ jobs:
           fi
           if [ -n "$OPENROUTER_API_KEY" ]; then
             printf '%s' "$OPENROUTER_API_KEY" | npx wrangler secret put OPENROUTER_API_KEY
+          fi
+          # Independent services, not routers: each one that is present adds a
+          # rung to the chain that the others' outages cannot take down.
+          if [ -n "$GROQ_API_KEY" ]; then
+            printf '%s' "$GROQ_API_KEY" | npx wrangler secret put GROQ_API_KEY
+          fi
+          if [ -n "$CEREBRAS_API_KEY" ]; then
+            printf '%s' "$CEREBRAS_API_KEY" | npx wrangler secret put CEREBRAS_API_KEY
           fi
 
       - name: Check the deployed site answers
