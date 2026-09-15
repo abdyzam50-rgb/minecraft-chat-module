@@ -414,3 +414,28 @@ test('we only ask about a fumble once', () => {
   store.noteAskedWho('Dream', NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', '3127 hello again'), NOW), null);
 });
+
+test('the reported fumbles are all recognised, from any distance', () => {
+  // Reported from the live site: Nova_77 stands at 24.6m and typed these four.
+  for (const [text, expected] of [
+    ['3127', 'maybe_mention'],
+    ['yo3271', 'maybe_mention'],   // no space between greeting and name
+    ['3712', 'maybe_mention'],
+    ['hello?', null],              // nothing name-like in it
+  ]) {
+    const { config, store } = setup({ username: '3172' });
+    store.updateNearby([{ name: 'Nova_77', distance: 24.6 }], NOW);
+    const trigger = detectFromChat(store, config, chat('Nova_77', text), NOW);
+    assert.equal(trigger?.kind ?? null, expected, text);
+  }
+});
+
+test('a shuffled name counts, a stray number does not', () => {
+  const shuffled = setup({ username: '3172' });
+  shuffled.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(shuffled.store, shuffled.config, chat('Dream', '1732'), NOW)?.kind, 'maybe_mention');
+
+  const unrelated = setup({ username: '3172' });
+  unrelated.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(unrelated.store, unrelated.config, chat('Dream', 'anyone got 4000 coins'), NOW), null);
+});

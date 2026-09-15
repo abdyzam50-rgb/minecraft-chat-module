@@ -56,3 +56,20 @@ test('corrections are configurable', () => {
   });
   assert.equal(sanitize('doing cata later', config).message, 'doing catacombs later');
 });
+
+test('a punctuation-only reply survives the terse trim', () => {
+  // "?" is a complete answer to a bare call-out. Tidying its leading
+  // punctuation away left an empty message, which was sent as nothing at all.
+  const terse = { maxWords: 2, stripNames: ['Nova_77', 'Nova'] };
+  for (const text of ['?', 'yh?', '!', '...']) {
+    const result = sanitize(text, clean, terse);
+    assert.equal(result.ok, true, text);
+    assert.equal(result.message, text);
+  }
+});
+
+test('the terse trim still does its job', () => {
+  const terse = { maxWords: 2, stripNames: ['xX_DreamSlayer_Xx', 'Dream'] };
+  assert.equal(sanitize('all g dream, ty', clean, terse).message, 'all g');
+  assert.equal(sanitize('Dream alr', clean, terse).message, 'alr');
+});

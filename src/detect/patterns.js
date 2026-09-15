@@ -245,16 +245,40 @@ function editDistance(a, b, cap = 3) {
  *   name is never read as a typo of ours
  * @returns {string|null}
  */
+function sortedChars(text) {
+  return [...text].sort().join('');
+}
+
+/**
+ * Split into candidate names, breaking at letter/digit boundaries too: people
+ * type "yo3271" without a space, and the name is the "3271" half.
+ */
+function nameTokens(text) {
+  return String(text ?? '')
+    .split(/[^A-Za-z0-9_]+/)
+    .flatMap((token) => [token, ...token.split(/(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])/)])
+    .filter(Boolean);
+}
+
 export function nearMiss(text, username, aliases = [], otherPlayers = []) {
   const targets = [username, ...aliases].filter(Boolean).map((t) => t.toLowerCase());
   const known = new Set(otherPlayers.filter(Boolean).map((n) => n.toLowerCase()));
 
-  for (const token of String(text ?? '').split(/[^A-Za-z0-9_]+/).filter(Boolean)) {
+  for (const token of nameTokens(text)) {
     const lower = token.toLowerCase();
     if (known.has(lower)) continue; // that is somebody else, spelled correctly
     for (const target of targets) {
       if (lower === target) return null; // spelled ours correctly; not a near miss
-      // Short names need a tighter tolerance or every number looks like a typo.
+
+      // The same characters in a different order — "3271" for "3172". Two edits
+      // by distance, but a fumble by any sensible reading, and a coincidence
+      // this exact is vanishingly unlikely. Simply allowing two edits on a
+      // four-character name would match most four-digit numbers instead.
+      if (lower.length === target.length && sortedChars(lower) === sortedChars(target)) {
+        return token;
+      }
+
+      // Short names need a tight tolerance or every number looks like a typo.
       const allowed = target.length <= 5 ? 1 : 2;
       if (Math.abs(lower.length - target.length) > allowed) continue;
       if (editDistance(lower, target, allowed) <= allowed) return token;

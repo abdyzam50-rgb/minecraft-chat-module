@@ -516,11 +516,24 @@ Dream: 3127 you there   ->  me?
 Dream: yeah u           ->  grinding ghosts here   (carries on as normal)
 ```
 
-Matching is Damerau-Levenshtein, so a transposition counts as one edit — that's
-how names actually get fumbled. Tolerance is one edit for names of five
-characters or fewer, two above that. A name that exactly matches another player
-nearby is never read as a typo of yours, and it only ever asks once per fumble
-(`detect.mention.confirmWindowMs`, 90s). Turn it off with
+Matching handles the three ways a name actually gets fumbled:
+
+| | |
+|---|---|
+| `3127`, `3712` | adjacent transposition — Damerau counts it as one edit |
+| `1732`, `2317` | same characters, reordered — a permutation is a fumble, not a coincidence |
+| `yo3271` | no space before the name — tokens split at letter/digit boundaries too |
+
+Tolerance is one edit for names of five characters or fewer, two above that.
+Allowing two outright on a four-character name would match most four-digit
+numbers, which is why the permutation rule exists instead.
+
+**No distance check.** A correctly typed name is answered from anywhere in the
+lobby, so an attempt at it that missed is the same intent. Gating this on
+proximity meant a player across the area could fumble the name three times and
+get nothing back. The guards that matter are the edit distance and never
+mistaking another player's name for a typo of yours. It asks once per fumble
+(`detect.mention.confirmWindowMs`, 90s); disable with
 `detect.mention.answerNearMisses: false`.
 
 **A greeting from arm's length is for you.** Someone stood within

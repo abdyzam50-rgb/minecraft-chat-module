@@ -167,7 +167,11 @@ export function detectNearMiss(store, config, message, ts = Date.now()) {
   if (store.inConversation(message.sender, config.limits.conversation.windowMs, ts)) return null;
   // Do not ask twice about the same fumble.
   if (store.awaitingAnswer(message.sender, config.detect.mention.confirmWindowMs, ts)) return null;
-  if (!store.isNearby(message.sender, config.detect.chatRadius, ts)) return null;
+  // Deliberately no distance check. Someone typing our name correctly is
+  // answered from anywhere in the lobby, and an attempt at it that missed is
+  // the same intent — gating this on proximity meant a player across the area
+  // could fumble the name three times and get nothing back. The guards that
+  // matter are the edit distance and not mistaking another player's name.
 
   const others = [...store.players.keys()].filter((n) => n !== message.sender);
   const typo = nearMiss(message.content, config.username, config.aliases, others);
@@ -326,10 +330,19 @@ export function detectMention(store, config, message, ts = Date.now()) {
   // Nobody keeps saying your name once you are already talking. If we are
   // mid-exchange with them and they are still nearby, their next line is for
   // us whether or not it says "3172".
+  // Proximity normally matters here, so a distant player's unrelated chatter is
+  // not mistaken for a reply to us. The exception is when we asked them a
+  // direct question ("me?"): we started that, so we listen for the answer from
+  // wherever they are standing.
+  const awaitingReply = store.awaitingAnswer(
+    message.sender,
+    config.detect.mention.confirmWindowMs,
+    ts,
+  );
   const continuing =
     !named &&
     store.inConversation(message.sender, config.limits.conversation.windowMs, ts) &&
-    store.isNearby(message.sender, config.detect.chatRadius, ts);
+    (awaitingReply || store.isNearby(message.sender, config.detect.chatRadius, ts));
 
   // Someone at arm's length saying nothing but hello is talking to us, name or
   // not — and this is what keeps a thread alive when a reply got dropped and

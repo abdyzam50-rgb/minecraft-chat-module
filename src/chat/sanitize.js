@@ -80,8 +80,11 @@ export function sanitize(raw, config, options = {}) {
     if (words.length > options.maxWords) text = words.slice(0, options.maxWords).join(' ');
   }
 
-  // Tidy up whatever the trimming left behind.
-  text = text.replace(/^[\s,;:.!?-]+/, '').replace(/[\s,;:-]+$/, '').trim();
+  // Tidy up whatever the trimming left behind — but never into nothing. "?" is
+  // a complete reply to a bare call-out, and stripping its leading punctuation
+  // would leave an empty message.
+  const tidied = text.replace(/^[\s,;:.!?-]+/, '').replace(/[\s,;:-]+$/, '').trim();
+  if (tidied) text = tidied;
 
   if (options.shout) {
     // Yelling is caps, not punctuation soup — a wall of "!!!" reads as a bot.
