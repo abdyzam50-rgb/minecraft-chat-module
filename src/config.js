@@ -54,7 +54,7 @@ export const DEFAULTS = {
      * players type a handful of words mid-grind, and long tidy sentences are
      * the giveaway.
      */
-    preferredLength: 40,
+    preferredLength: 24,
     /**
      * Hard word cap on replies that are meant to be tiny — a bare call-out or
      * an acknowledgement. Enforced, not requested: the model keeps appending a

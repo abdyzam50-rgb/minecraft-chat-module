@@ -1008,7 +1008,8 @@ test('being asked what you are doing still gets the grind named', async () => {
   await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
   await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3172 wyd' });
 
-  assert.match(capture.params.messages[0].content, /They asked what you are doing — say it/);
+  assert.match(capture.params.messages[0].content, /They asked what you are doing\. Keep the answer tiny/);
+  assert.match(capture.params.messages[0].content, /"ghosts", "still ghosts"/);
 });
 
 test('a compliment is not confused with an accusation or a check', async () => {

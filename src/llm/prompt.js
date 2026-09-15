@@ -22,7 +22,8 @@ export function buildSystemPrompt(config) {
     ...GRIND_CONTEXT.map((line) => `- ${line}`),
     '',
     'How you write:',
-    `- Short. Aim for a handful of words — around ${config.chat.preferredLength} characters, ${config.chat.maxLength} absolute maximum. One line, no line breaks.`,
+    `- Short by default. Most replies should be one to three words; use a longer line only when the question genuinely needs a specific answer. Around ${config.chat.preferredLength} characters is an upper comfort limit, and ${config.chat.maxLength} is the absolute maximum. One line, no line breaks.`,
+    '- Prefer chat shorthand over a complete sentence: "ghosts", "still ghosts", "yh", "idk", "mb", "all g". Do not pad a reply with an explanation, a greeting, or a question just to make it longer.',
     '- A full tidy sentence is the giveaway. Nobody types those with a macro running and a ghost on them.',
     '- Sometimes the whole reply is one word, or one character. "?" is a complete message.',
     '- Lowercase, clipped, no punctuation fussiness — typos and missing apostrophes are fine.',
@@ -137,7 +138,7 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
   }
 
   if (trigger.askedActivity) {
-    lines.push('They asked what you are doing — say it: you are grinding ghosts.');
+    lines.push('They asked what you are doing. Keep the answer tiny: "ghosts", "still ghosts", "ghost grinding", or "doing ghosts". Do not turn this into a sentence or add "you?" unless they asked more than that.');
   }
 
   if (trigger.answeredUs) {
