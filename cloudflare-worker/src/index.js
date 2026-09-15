@@ -81,6 +81,15 @@ function isBusy(status) {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
+/**
+ * A reply nobody is waiting for is worth nothing. Someone types in chat and
+ * expects an answer in a second or two, so a slow model is a busy model: give
+ * each one a short window, and stop walking the list once the whole budget is
+ * spent rather than trying all of them and timing out with nothing.
+ */
+const PER_MODEL_MS = 9_000;
+const TOTAL_MS = 25_000;
+
 /** Keeps the API key on Cloudflare; the static site sends only a prompt. */
 export default {
   async fetch(request, env) {
@@ -167,11 +176,25 @@ async function replyFromOpenAI(env, models, key, prompt) {
   const baseUrl = (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
   const busy = [];
 
+  const deadline = Date.now() + TOTAL_MS;
+
   for (const model of models) {
+    if (Date.now() >= deadline && busy.length) {
+      throw new Error(`out of time after ${busy.join(', ')}`);
+    }
     // Structured-output support varies wildly between models behind these
     // gateways. A model that rejects the schema usually still honours
     // json_object, so drop to that once rather than failing the reply.
-    let response = await callOpenAI(baseUrl, model, key, prompt, true);
+    let response;
+    try {
+      response = await callOpenAI(baseUrl, model, key, prompt, true);
+    } catch (error) {
+      // An aborted request looks exactly like a busy one from here.
+      if (model === models[models.length - 1]) throw new Error(`${model}: ${error.message}`);
+      console.warn(`${model} timed out, trying the next model`);
+      busy.push(`${model} timeout`);
+      continue;
+    }
     if (!response.ok && response.status === 400) {
       const detail = await errorMessage(response);
       if (/schema|response_format|json/i.test(detail)) {
@@ -221,6 +244,7 @@ function callGemini(model, key, prompt, thinkingConfig) {
 
   return fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
+    signal: AbortSignal.timeout(PER_MODEL_MS),
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -239,6 +263,7 @@ function callOpenAI(baseUrl, model, key, prompt, withSchema) {
   }
   return fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
+    signal: AbortSignal.timeout(PER_MODEL_MS),
     headers,
     body: JSON.stringify({
       model,
