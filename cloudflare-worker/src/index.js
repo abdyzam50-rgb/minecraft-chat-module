@@ -87,15 +87,6 @@ function keyShape(env) {
  */
 function gateways(env) {
   const list = [];
-  const shared = gatewayKey(env);
-  if (shared) {
-    list.push({
-      name: gatewayKeyName(env),
-      baseUrl: (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, ''),
-      key: shared,
-      models: splitModels(env.OPENAI_MODEL || 'google/gemma-4-26b-a4b-it:free'),
-    });
-  }
   // Groq and Cerebras both run open models on their own fast hardware with a
   // free tier, and both speak this wire format, so each costs one secret and
   // no code. They are independent of the routers above, which is the point.
@@ -113,6 +104,17 @@ function gateways(env) {
       baseUrl: (env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1').replace(/\/$/, ''),
       key: env.CEREBRAS_API_KEY.trim(),
       models: splitModels(env.CEREBRAS_MODEL || 'llama-3.3-70b'),
+    });
+  }
+  // Routers last. They resell a shared free pool, so they queue behind
+  // everyone else using it, where the services above run the model themselves.
+  const shared = gatewayKey(env);
+  if (shared) {
+    list.push({
+      name: gatewayKeyName(env),
+      baseUrl: (env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, ''),
+      key: shared,
+      models: splitModels(env.OPENAI_MODEL || 'google/gemma-4-26b-a4b-it:free'),
     });
   }
   return list;
@@ -444,7 +446,7 @@ function callOpenAI(baseUrl, model, key, prompt, withSchema) {
       // anything, and a cap sized for a one-line reply is entirely consumed
       // before the reply starts — which comes back as an empty answer rather
       // than as an error.
-      max_tokens: /reason|think/i.test(model) ? 4000 : 800,
+      max_tokens: /reason|think/i.test(model) ? 4000 : 2000,
       messages: [{ role: 'user', content: prompt }],
       response_format: withSchema
         ? { type: 'json_schema', json_schema: { name: 'reply', strict: true, schema: REPLY_SCHEMA_JSON } }
