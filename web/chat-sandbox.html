@@ -449,6 +449,7 @@
       accusation: ["not cheating, just been grinding this a while", "nah, no macro here — just boring repetition"],
       spot_claim: ["mb, ill move", "oh sorry, all yours", "my bad, ill shift over", "no worries, ill find another spawn", "ah mb, moving now"],
       hostile: ["all good, i'll path around you", "no problem, moving on"],
+      hostile_followup: ["still on that?", "what now?"],
       opener: ["yh?", "?", "sup", "whats up"],
       greeting: ["yo", "wsg", "hey", "ey"],
       smalltalk: ["all g", "no worries", "all good", "np"],
@@ -471,6 +472,7 @@
       ],
       spot_claim: ["mb ill move", "fair enough, ill shift", "all yours", "aight, moving", "yeah fair, ill go elsewhere"],
       hostile: ["it's a public lobby, genius", "i was here first but sure"],
+      hostile_followup: ["can you read?", "still here?"],
       opener: ["?", "yh?", "what", "wha"],
       greeting: ["yo", "wsg", "ey", "sup"],
       smalltalk: ["all g", "np", "cool", "yh"],
@@ -493,6 +495,7 @@
       ],
       spot_claim: ["idc fuck off", "go fuck yourself", "cry about it", "not moving", "fuck you, find another spot", "cry harder", "touch grass", "keep coping", "nobody asked", "move then"],
       hostile: ["fuck off", "get a life", "stop being a bitch", "fuck you", "fuck you too", "cry harder", "touch grass", "keep coping", "nobody asked"],
+      hostile_followup: ["i said fuck off", "can u read", "weirdo", "still yapping"],
       opener: ["?", "what", "wha", "yh"],
       greeting: ["yo", "wsg", "ey", "hey"],
       smalltalk: ["all g", "np", "yh", "cool"],
@@ -569,6 +572,11 @@
   /** The last thing we said, or null. */
   function lastSaid() {
     return state.sent.length ? state.sent[state.sent.length - 1] : null;
+  }
+
+  function recentDirectHostilityFrom(name, ts) {
+    const last = state.sent.slice().reverse().find(function (line) { return line.subject === name; });
+    return Boolean(last && last.kind === "hostile" && last.forceFallback && ts - last.ts <= 60000);
   }
 
   /** Did our last line end with a question? Ask-backs carry no question mark. */
@@ -1374,7 +1382,7 @@
       gate = checkPolicy(trigger, attempt.message);
       if (!gate.allowed) return logEntry("limit", gate.reason);
 
-      state.sent.push({ ts: Date.now(), message: attempt.message, subject: trigger.subject, kind: trigger.kind });
+      state.sent.push({ ts: Date.now(), message: attempt.message, subject: trigger.subject, kind: trigger.kind, forceFallback: Boolean(trigger.forceFallback) });
       if (trigger.anger && trigger.subject) {
         state.anger[trigger.subject] = Math.max(state.anger[trigger.subject] || 0, trigger.anger);
       }
@@ -1511,6 +1519,14 @@
     // human thing this can do.
     const greetingUpClose = !named && isGreetingOnly(stripName(text)) &&
       player.distance <= DETECT.greetingRadius;
+    if (state.persona === "unfiltered" && isGreetingOnly(stripName(text)) &&
+        recentDirectHostilityFrom(player.name, ts) && (named || nearby)) {
+      return respond({
+        kind: "hostile_followup", subject: player.name, channel, conversational: true, forceFallback: true,
+        evidence: shortName(player.name) + " tried to restart chat right after directly insulting me",
+      });
+    }
+
     if (named || continuing || greetingUpClose) {
       if (isLikelyGibberish(stripName(text))) {
         return logEntry("skip", "obvious keyboard mash — no reply");
