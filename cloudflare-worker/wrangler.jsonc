@@ -20,10 +20,14 @@
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
     "LLM_PROVIDER": "openai",
-    // What GET /models?gateway=GROQ_API_KEY actually reports. gpt-oss-20b is
-    // the small fast one, qwen next, then the 120b. Not llama-3.3-70b, which
-    // was a guess from memory and is not on Groq at all.
-    "GROQ_MODEL": "openai/gpt-oss-20b, qwen/qwen3.8-27b, openai/gpt-oss-120b",
+    // What GET /models?gateway=GROQ_API_KEY actually reports — not
+    // llama-3.3-70b, which was a guess from memory and is not on Groq at all.
+    //
+    // Largest first. The 20b answered every request and wrote "thanks" to a
+    // greeting and the bot's own name back at it, which is worse than a slow
+    // reply for something trying to pass as a person. On Groq the 120b is
+    // still fast enough for chat.
+    "GROQ_MODEL": "openai/gpt-oss-120b, qwen/qwen3.8-27b, openai/gpt-oss-20b",
     "OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
     "OPENAI_MODEL": "z-ai/glm-5.3-free, nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
   }
