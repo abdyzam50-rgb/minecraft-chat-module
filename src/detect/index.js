@@ -13,6 +13,7 @@ import {
   nearMiss,
   isGreetingOnly,
   isSmallTalk,
+  isLikelyGibberish,
   normalizeChatText,
   HOSTILE_NUDGE,
   MACRO_CHECK_TALK,
@@ -377,6 +378,7 @@ export function detectMention(store, config, message, ts = Date.now()) {
     .reduce((text, name) => text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' '), content)
     .replace(/\s+/g, ' ')
     .trim();
+  if (isLikelyGibberish(remainder)) return null;
   const opener = isGreetingOnly(remainder);
   // "3172" on its own and "yo" are both openers, but they want opposite
   // replies: a bare name call wants "?", a greeting wants a greeting back.

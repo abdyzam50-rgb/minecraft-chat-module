@@ -219,6 +219,19 @@ export function isSmallTalk(text) {
 }
 
 /**
+ * Obvious keyboard mash has no conversational intent. Keep this deliberately
+ * narrow: ordinary slang and misspellings should still reach the model.
+ */
+export function isLikelyGibberish(text) {
+  const words = String(text ?? '').toLowerCase().match(/[a-z]+/g) ?? [];
+  if (!words.length) return false;
+  return words.every((word) => {
+    const vowels = (word.match(/[aeiouy]/g) ?? []).length;
+    return /(?:asdf|qwer|zxcv|hjkl|lkjh|poiuy)/.test(word) || (word.length >= 8 && vowels <= 1);
+  });
+}
+
+/**
  * Shorthand questions. These are three letters long and carry a real question,
  * so they must not be mistaken for noise.
  */

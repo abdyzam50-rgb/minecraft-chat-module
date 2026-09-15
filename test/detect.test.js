@@ -279,6 +279,13 @@ test('normalizes conversational shorthand and small typos before matching intent
     assert.equal(trigger?.[expected], true, `"${text}" should be ${expected}`);
   }
 });
+
+test('does not call the model for an obvious keyboard smash', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172 asdfghjkl'), NOW), null);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3172 qwertyuiop'), NOW), null);
+});
 test('a greeting with a question attached is not just a greeting', () => {
   const { config, store } = setup({ username: '3172' });
   store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);

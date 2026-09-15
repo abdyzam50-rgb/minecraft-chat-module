@@ -1296,6 +1296,15 @@
     return { maxWords: 4, stripNames: names };
   }
 
+  function isLikelyGibberish(text) {
+    const words = String(text || "").toLowerCase().match(/[a-z]+/g) || [];
+    if (!words.length) return false;
+    return words.every(function (word) {
+      const vowels = (word.match(/[aeiouy]/g) || []).length;
+      return /(?:asdf|qwer|zxcv|hjkl|lkjh|poiuy)/.test(word) || (word.length >= 8 && vowels <= 1);
+    });
+  }
+
   /* ---------- the pipeline ---------- */
 
   function fallbackLine(trigger) {
@@ -1498,6 +1507,9 @@
       // question in the first line goes unanswered. Both lines are one turn.
       const turn = burstText(player.name, text, ts);
       const remainder = stripName(turn);
+      if (isLikelyGibberish(remainder)) {
+        return logEntry("skip", "obvious keyboard mash — no reply");
+      }
       const opener = isGreetingOnly(remainder);
       // "3172" alone and "yo" are both openers and want opposite replies: a
       // bare name call wants "?", a greeting wants a greeting back.
