@@ -33,6 +33,15 @@ const REPLY_SCHEMA_JSON = {
 const THINK_BLOCK = /<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi;
 
 /**
+ * The gateway key, under whichever name it was stored. "openai" here is the
+ * wire format, not the vendor, so the key usually belongs to TokenRouter or
+ * OpenRouter and is named after them.
+ */
+function gatewayKey(env) {
+  return env.TOKENROUTER_API_KEY || env.OPENROUTER_API_KEY || env.OPENAI_API_KEY || '';
+}
+
+/**
  * Which upstream to call. Explicit LLM_PROVIDER wins; otherwise whichever key
  * is configured, preferring Gemini so an existing deploy keeps behaving the
  * same after this change.
@@ -41,12 +50,12 @@ function pickProvider(env) {
   const explicit = (env.LLM_PROVIDER || '').trim().toLowerCase();
   if (explicit === 'gemini' || explicit === 'openai') return explicit;
   if (env.GEMINI_API_KEY) return 'gemini';
-  if (env.OPENAI_API_KEY) return 'openai';
+  if (gatewayKey(env)) return 'openai';
   return 'gemini';
 }
 
 function keyFor(env, provider) {
-  return provider === 'openai' ? env.OPENAI_API_KEY : env.GEMINI_API_KEY;
+  return provider === 'openai' ? gatewayKey(env) : env.GEMINI_API_KEY;
 }
 
 function modelFor(env, provider) {
@@ -75,7 +84,7 @@ export default {
       return json({ error: 'not found' }, 404, headers);
     }
     if (!key) {
-      const name = provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
+      const name = provider === 'openai' ? 'TOKENROUTER_API_KEY' : 'GEMINI_API_KEY';
       return json({ error: `server is missing ${name}` }, 500, headers);
     }
 

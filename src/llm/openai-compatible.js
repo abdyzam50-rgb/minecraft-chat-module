@@ -26,12 +26,7 @@ export class OpenAICompatibleResponder {
     this.systemPrompt = buildSystemPrompt(config);
     this.fetch = fetchImpl;
     this.baseUrl = (config.llm.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
-    this.apiKey =
-      config.llm.apiKey ||
-      process.env.OPENAI_API_KEY ||
-      process.env.TOKENROUTER_API_KEY ||
-      process.env.OPENROUTER_API_KEY ||
-      '';
+    this.apiKey = config.llm.apiKey || keyForHost(this.baseUrl, process.env);
     this.available = Boolean(this.apiKey);
     /** Set once a model turns out not to accept a JSON schema. */
     this.schemaUnsupported = false;
@@ -116,6 +111,23 @@ export class OpenAICompatibleResponder {
       }),
     });
   }
+}
+
+/**
+ * Pick the key that belongs to the host we are about to call, rather than
+ * whichever is set first. With several gateways configured at once, sending
+ * OpenAI's key to TokenRouter produces a 401 that looks like a bad key.
+ */
+function keyForHost(baseUrl, env) {
+  const host = baseUrl.toLowerCase();
+  const named =
+    (host.includes('tokenrouter') && env.TOKENROUTER_API_KEY) ||
+    (host.includes('openrouter') && env.OPENROUTER_API_KEY) ||
+    (host.includes('openai.com') && env.OPENAI_API_KEY) ||
+    '';
+  // A local Ollama or an unrecognised gateway: any key will do, and most
+  // local servers ignore it entirely.
+  return named || env.OPENAI_API_KEY || env.TOKENROUTER_API_KEY || env.OPENROUTER_API_KEY || '';
 }
 
 async function errorMessage(response) {

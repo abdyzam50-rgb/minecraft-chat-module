@@ -239,3 +239,36 @@ test('the brain wires up the openai provider too', () => {
   assert.equal(ai.responder.name, 'openai');
   assert.equal(ai.usingApi, true);
 });
+
+test('the key is chosen by gateway host, not by whichever env var is set first', async () => {
+  const { OpenAICompatibleResponder } = await import('../src/llm/openai-compatible.js');
+  const saved = { ...process.env };
+  process.env.OPENAI_API_KEY = 'openai-key';
+  process.env.TOKENROUTER_API_KEY = 'tokenrouter-key';
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  try {
+    const at = (baseUrl) =>
+      new OpenAICompatibleResponder(
+        resolveConfig({ username: '3172', llm: { provider: 'openai', baseUrl, model: 'm' } }),
+      ).apiKey;
+
+    assert.equal(at('https://api.tokenrouter.com/v1'), 'tokenrouter-key');
+    assert.equal(at('https://openrouter.ai/api/v1'), 'openrouter-key');
+    assert.equal(at('https://api.openai.com/v1'), 'openai-key');
+    // An unrecognised host — a local Ollama, say — takes whatever there is.
+    assert.equal(at('http://127.0.0.1:11434/v1'), 'openai-key');
+  } finally {
+    process.env = saved;
+  }
+});
+
+test('an explicit apiKey still wins over anything in the environment', async () => {
+  const { OpenAICompatibleResponder } = await import('../src/llm/openai-compatible.js');
+  const saved = { ...process.env };
+  process.env.TOKENROUTER_API_KEY = 'tokenrouter-key';
+  try {
+    assert.equal(new OpenAICompatibleResponder(openaiConfig({ apiKey: 'explicit' })).apiKey, 'explicit');
+  } finally {
+    process.env = saved;
+  }
+});

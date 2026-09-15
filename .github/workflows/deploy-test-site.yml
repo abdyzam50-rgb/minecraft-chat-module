@@ -23,15 +23,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
         run: |
           missing=""
           [ -n "$CLOUDFLARE_API_TOKEN" ]  || missing="$missing CF_API_TOKEN"
           [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
           # Either upstream will do. The Worker prefers Gemini when both are
           # set, unless LLM_PROVIDER in wrangler.jsonc says otherwise.
-          if [ -z "$GEMINI_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
-            missing="$missing GEMINI_API_KEY-or-OPENAI_API_KEY"
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$TOKENROUTER_API_KEY" ]; then
+            missing="$missing GEMINI_API_KEY-or-TOKENROUTER_API_KEY"
           fi
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing"
@@ -86,15 +86,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
         run: |
           # Whichever are configured. Setting both is fine and makes switching
           # provider a wrangler.jsonc edit rather than a secrets change.
           if [ -n "$GEMINI_API_KEY" ]; then
             printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY
           fi
-          if [ -n "$OPENAI_API_KEY" ]; then
-            printf '%s' "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY
+          if [ -n "$TOKENROUTER_API_KEY" ]; then
+            printf '%s' "$TOKENROUTER_API_KEY" | npx wrangler secret put TOKENROUTER_API_KEY
           fi
 
       - name: Check the deployed site answers

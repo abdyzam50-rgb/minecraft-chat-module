@@ -82,8 +82,10 @@ GEMINI_API_KEY=...
 MCCHAT_PROVIDER=gemini
 ```
 
-The `openai` adapter reads `OPENAI_API_KEY`, then `TOKENROUTER_API_KEY`, then
-`OPENROUTER_API_KEY`, so you can keep several and switch by `baseUrl`.
+The `openai` adapter picks the key that matches the host in `baseUrl` —
+`TOKENROUTER_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` — so you can keep
+several configured and switch gateway by changing one line. Sending the wrong
+one produces a 401 that reads like a bad key rather than a wrong key.
 
 Then check it actually works before you rely on it:
 
@@ -174,8 +176,8 @@ The page never holds a key. It posts its prompt to `/api/reply`; the Worker adds
 the key server-side.
 
 The Worker speaks both upstreams the module does — Gemini, and any OpenAI-shaped
-`/chat/completions` gateway. Switching the test site to a free model is a
-`cloudflare-worker/wrangler.jsonc` edit plus an `OPENAI_API_KEY` repo secret:
+`/chat/completions` gateway. Which one is a `cloudflare-worker/wrangler.jsonc`
+edit; the site currently runs on TokenRouter's free tier:
 
 ```jsonc
 "LLM_PROVIDER": "openai",
@@ -183,15 +185,15 @@ The Worker speaks both upstreams the module does — Gemini, and any OpenAI-shap
 "OPENAI_MODEL": "z-ai/glm-5.3-free"
 ```
 
-With no `LLM_PROVIDER` it uses whichever key is configured, preferring Gemini, so
-an existing deploy is unaffected. `/health` reports the provider and model it
+Set it back to `"gemini"` to return to `GEMINI_MODEL`. With no `LLM_PROVIDER` at
+all it uses whichever key is configured, preferring Gemini. `/health` reports the provider and model it
 resolved, and the page puts the model name in its status line — when you are
 comparing how two models write "yh?", you want to know which one you are looking
 at without reading the deploy log.
 
 `.github/workflows/deploy-test-site.yml` deploys both on a push. It needs
 `CF_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, plus at least one of `GEMINI_API_KEY`
-and `OPENAI_API_KEY`, and checks up front so a missing one names itself. Setting
+and `TOKENROUTER_API_KEY`, and checks up front so a missing one names itself. Setting
 both keys is fine, and makes changing provider an edit rather than a secrets
 change. After deploying it polls the live site until `/health` reports its key
 and `/chat-sandbox.html` returns 200, so a green run means the site actually
