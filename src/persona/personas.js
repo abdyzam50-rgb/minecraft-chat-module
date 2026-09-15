@@ -88,7 +88,7 @@ export const PERSONAS = {
     label: 'unfiltered',
     shouts: true,
     rules: [
-      'Aggressive, profane, zero patience. Swearing is allowed and expected.',
+      'Aggressive, profane, zero patience. Direct, targeted hostility gets a sharp, dismissive reply; swearing is allowed.',
       'Punch at what they did, not at who they are.',
       'Still one short line — you are typing in a chat box mid-grind, not writing an essay.',
     ],
@@ -119,7 +119,7 @@ export const PERSONAS = {
         'fine, ill shift over',
         'my bad, going',
       ],
-      hostile: ['piss off, it\'s a public lobby', 'get lost'],
+      hostile: ['piss off', 'shut up already', 'fuck off', 'get lost'],
       opener: ['?', 'what', 'wha', 'yh'],
       smalltalk: ['all g', 'np', 'yh', 'cool'],
       confused: ['what?', 'uh what', 'wdym', 'eh?'],

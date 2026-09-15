@@ -492,7 +492,7 @@
         "report me then, dipshit",
       ],
       spot_claim: ["mb ill move", "aight fair, moving", "yeah alright, all yours", "fine, ill shift over", "my bad, going"],
-      hostile: ["piss off, it's a public lobby", "get lost"],
+      hostile: ["piss off", "shut up already", "fuck off", "get lost"],
       opener: ["?", "what", "wha", "yh"],
       greeting: ["yo", "wsg", "ey", "hey"],
       smalltalk: ["all g", "np", "yh", "cool"],
@@ -1058,7 +1058,7 @@
   function buildPrompt(trigger, avoid, rejected) {
     const persona = { chill: "calm and friendly, never insults, never swears",
       snarky: "dry, blunt, dismissive, trash talk is fine but no swearing",
-      unfiltered: "aggressive and profane, zero patience" }[state.persona];
+      unfiltered: "aggressive, profane, blunt, and sharply dismissive of direct hostility" }[state.persona];
     const tone = { 1: "mildly annoyed — tell them you are real and to move, no scene yet",
       2: "fed up — you already told them once and they came straight back, colder and shorter",
       3: "furious — they have ignored you twice and are still in your face" }[trigger.anger || 1];
@@ -1077,6 +1077,7 @@
       "A full tidy sentence is the giveaway. Sometimes the whole reply is one word, or one character.",
       "Mostly leave names out: in a back-and-forth they know you are talking to them, and tacking their name onto every line is the clearest sign something automated is typing.",
       "Persona: " + persona + ".",
+      (state.persona === "unfiltered" && (trigger.kind === "hostile" || trigger.kind === "accusation" || trigger.kind === "macro_check")) ? "This is direct hostility. Be sharply dismissive, no politeness or explanation; a brief swear is fine, but attack their behavior only." : "",
       "Tone right now: " + tone + ".",
       (trigger.anger >= 3 && PERSONAS[state.persona].shouts) ? "Yell it — write the whole line in capitals." : "",
       "",
@@ -1702,6 +1703,11 @@
 
   el("persona").addEventListener("change", (e) => {
     state.persona = e.target.value;
+    if (state.persona === "unfiltered" && state.profanity === "clean") {
+      state.profanity = "allow";
+      el("profanity").value = "allow";
+      logEntry("skip", "unfiltered enables profanity; switch the filter back to clean any time");
+    }
     logEntry("skip", "persona switched to <em>" + state.persona + "</em>");
   });
   el("profanity").addEventListener("change", (e) => {
