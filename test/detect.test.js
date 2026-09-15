@@ -280,3 +280,58 @@ test('praise is told apart from questions and accusations', () => {
   assert.ok(!compliment('3172 how much u made'), 'that is a question');
   assert.equal(detectFromChat(store, config, chat('Dream', '3172 ur macroing'), NOW).kind, 'accusation');
 });
+
+test('a typed macro check escalates on how often they ask, not on the blocking fuse', () => {
+  const { config, store } = setup({ username: '3172' }, () => 0.5);
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+
+  const anger = [];
+  for (let i = 0; i < 5; i += 1) {
+    const trigger = detectFromChat(store, config, chat('Checker', 'macro check, say something if ur real'), NOW);
+    assert.equal(trigger?.kind, 'macro_check', `check ${i + 1} must still be answered`);
+    anger.push(trigger.anger);
+  }
+  assert.deepEqual(anger, [1, 2, 3, 3, 3], 'annoyed, fed up, then furious and staying there');
+});
+
+test('every repeat of a typed check gets an answer', () => {
+  // Silence is the one thing a macro check is testing for, so no repeat may
+  // be skipped however many times they ask.
+  const { config, store } = setup({ username: '3172' }, () => 0.5);
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+  for (let i = 0; i < 8; i += 1) {
+    assert.ok(
+      detectFromChat(store, config, chat('Checker', 'u real?'), NOW),
+      `check ${i + 1} went unanswered`,
+    );
+  }
+});
+
+test('the temper cools once they stop asking', () => {
+  const { config, store } = setup({ username: '3172' }, () => 0.5);
+  store.updateNearby([{ name: 'Checker', distance: 2 }], NOW);
+  for (let i = 0; i < 3; i += 1) detectFromChat(store, config, chat('Checker', 'u real?'), NOW);
+
+  const later = NOW + config.detect.macroCheck.windowMs + 1000;
+  store.updateNearby([{ name: 'Checker', distance: 2 }], later);
+  const trigger = detectFromChat(store, config, chat('Checker', 'u real?'), later);
+  assert.equal(trigger.anger, 1, 'a check ten minutes later starts civil again');
+});
+
+test('standing in the path still uses the randomised fuse', () => {
+  // Typing a check is deliberate; walking into someone three times might not
+  // be, so that path keeps its slower, randomised escalation.
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Blocker', distance: 2 }], NOW);
+
+  const anger = [];
+  for (let i = 0; i < 7; i += 1) {
+    store.updatePathfinder({ state: 'blocked', blockedBy: 'Blocker' }, NOW);
+    const trigger = detectPathfinderBlock(store, config, NOW);
+    if (trigger) {
+      anger.push(trigger.anger);
+      store.noteAnger('Blocker', trigger.anger);
+    }
+  }
+  assert.deepEqual(anger, [1, 2, 3], 'one message per rung, spread over more blocks');
+});

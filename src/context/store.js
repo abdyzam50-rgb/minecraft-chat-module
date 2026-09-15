@@ -59,6 +59,8 @@ export class ContextStore {
         lastSeen: 0,
         distance: null,
         blocks: [],
+        /** Times they have TYPED a macro check at us, as opposed to standing there. */
+        checks: [],
         accusations: [],
         lastReplyTo: null,
         /** Assigned on their first block — see patienceFor(). */
@@ -144,6 +146,24 @@ export class ContextStore {
   noteAnger(name, anger) {
     const p = this.player(name);
     if (anger > p.lastAnger) p.lastAnger = anger;
+  }
+
+  /**
+   * They typed a macro check. Standing in someone's path can be an accident
+   * three times over; typing "say something if ur real" cannot. Each one is a
+   * deliberate act, so these count on their own and much harder than blocks.
+   */
+  recordCheck(name, ts = this.now()) {
+    const p = this.player(name);
+    p.checks.push(ts);
+    p.lastSeen = ts;
+    if (p.checks.length > INCIDENT_HISTORY) p.checks.shift();
+  }
+
+  checksWithin(name, windowMs, ts = this.now()) {
+    const p = this.players.get(name);
+    if (!p) return 0;
+    return p.checks.filter((t) => ts - t <= windowMs).length;
   }
 
   recordAccusation(name, ts = this.now()) {

@@ -150,6 +150,20 @@ export const DEFAULTS = {
       patience: [4, 7],
       rage: [2, 4],
     },
+
+    /**
+     * Someone TYPING a macro check at us, repeatedly. Nothing ambient about
+     * it, so this escalates on its own count and fast: asked once you are
+     * mildly annoyed, twice you are fed up, three times and they are doing it
+     * to wind you up.
+     */
+    macroCheck: {
+      annoyedAt: 1,
+      fedUpAt: 2,
+      furiousAt: 3,
+      /** Checks older than this stop counting towards the temper. */
+      windowMs: 300000,
+    },
     /** How far away someone can be and still plausibly be talking to us. */
     chatRadius: 12,
     /**

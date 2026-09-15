@@ -223,7 +223,8 @@ climbs a ladder, one message per rung:
 | 3 | `rage` blocks after that | "DREAM MOVE. IM REAL. YOUVE BEEN IN MY FACE FOR TWO MINUTES." |
 
 **Both counts are rolled per player, per session** (`detect.pathfinder.patience`
-and `.rage`, default 4–7 then +2–4). Snapping on exactly the third block every
+and `.rage`, default 4–7 then +2–4). That randomised fuse applies to *blocking*
+only — someone crossing your path three times might genuinely be unlucky. Snapping on exactly the third block every
 single time is itself a detectable pattern, and a macro check is precisely the
 moment somebody is watching for one — so there isn't a fixed number to learn.
 The polite rung is never skipped, however the roll lands.
@@ -231,10 +232,23 @@ The polite rung is never skipped, however the roll lands.
 Anger 3 is shouted in caps by the `snarky` and `unfiltered` personas. `chill`
 still escalates, but stays in lowercase — it has `shouts: false`.
 
-Verbal checks count too: *"macro check"*, *"u real?"*, *"say something"*,
-*"react"*, *"hit me if ur not macroing"* all push the same ladder when they come
-from someone standing near you, and they take precedence over the accusation
-handler when both match.
+**A typed check escalates on its own count, much faster.** *"macro check"*,
+*"u real?"*, *"say something"*, *"react"*, *"hit me if ur not macroing"* — each
+repetition is a deliberate act, so unlike walking into someone's path there is
+nothing ambient to filter out:
+
+| They ask | Reply |
+|---|---|
+| 1st time | annoyed — you're real, move on |
+| 2nd time | fed up — already answered that |
+| 3rd time and after | furious, and shouted |
+
+Every repeat is answered, at whatever temper it has reached. The one thing a
+macro check is testing for is silence, so no repeat may be skipped however many
+times they ask. The temper cools after `detect.macroCheck.windowMs` (5 min) of
+them leaving you alone.
+
+These take precedence over the accusation handler when both patterns match.
 
 Each rung speaks once. Repeating a rung would burn the message budget the next
 one needs, so an escalating reply also steps past the per-player cooldown — a

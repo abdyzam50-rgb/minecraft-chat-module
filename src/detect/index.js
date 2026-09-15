@@ -105,21 +105,45 @@ export function detectMacroCheckTalk(store, config, message, ts = Date.now()) {
   const named = mentions(message.content, config.username, config.aliases);
   if (!nearby && !named) return null;
 
-  const { patience, rage } = store.patienceFor(message.sender, settings);
-  // Being told to prove yourself counts as a block: it is the same test.
-  const count = Math.max(settings.threshold, store.blocksWithin(message.sender, settings.windowMs, ts) + 1);
+  // A typed check escalates on its own count, not on the blocking fuse. The
+  // fuse is randomised because someone crossing your path three times might
+  // genuinely be unlucky; typing "say something if ur real" twice is not bad
+  // luck, and a bot that answers the first one politely and then repeats
+  // itself — or worse, goes quiet — is the tell.
+  store.recordCheck(message.sender, ts);
+  const check = config.detect.macroCheck;
+  const asked = store.checksWithin(message.sender, check.windowMs, ts);
 
-  const trigger = macroCheckTrigger({
-    blocker: message.sender,
-    count,
-    patience,
-    rage,
-    said: message.content,
-    config,
-  });
-  trigger.conversational = true;
-  if (trigger.anger <= store.player(message.sender).lastAnger) return null;
-  return trigger;
+  let anger = 1;
+  if (asked >= check.furiousAt) anger = 3;
+  else if (asked >= check.fedUpAt) anger = 2;
+
+  const blocks = store.blocksWithin(message.sender, settings.windowMs, ts);
+  const evidence = [
+    `${message.sender} typed "${message.content}" at me`,
+    asked > 1 ? ` — that is the ${ordinal(asked)} time they have asked` : '',
+    blocks ? `, and they have been stood in my path ${blocks}x` : '',
+    '. They are macro checking me: the thing they are testing for is whether I answer at all.',
+    anger === 2 ? ' I have already answered them once and they asked again.' : '',
+    anger === 3 ? ' They have kept asking after being answered twice. They are doing it to wind me up now.' : '',
+  ].join('');
+
+  return {
+    kind: 'macro_check',
+    subject: message.sender,
+    severity: anger,
+    anger,
+    conversational: true,
+    // Always answer a typed check, at whatever temper it has reached. Silence
+    // is the single thing it is looking for.
+    escalates: anger > 1,
+    evidence,
+    channel: message.channel === 'whisper' ? 'whisper' : message.channel,
+  };
+}
+
+function ordinal(n) {
+  return ['zeroth', 'first', 'second', 'third', 'fourth', 'fifth'][n] ?? `${n}th`;
 }
 
 /**
