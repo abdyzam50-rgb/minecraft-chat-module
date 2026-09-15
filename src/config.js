@@ -89,7 +89,12 @@ export const DEFAULTS = {
      */
     similarityThreshold: 0.55,
     /** How many recent lines the model is told to avoid repeating. */
-    avoidHistory: 8,
+    avoidHistory: 24,
+    /**
+     * Anti-repeat memory is deliberately finite. After roughly two dozen
+     * messages, occasional reuse is normal conversation rather than a tell.
+     */
+    repeatHistory: 24,
     /** Channels the bot is allowed to talk in. */
     speakIn: ['all', 'party'],
   },
@@ -122,7 +127,7 @@ export const DEFAULTS = {
       /** Gap between our replies mid-conversation, instead of the global one. */
       cooldownMs: 2500,
       /** Turns we'll take in a normal exchange before letting it rest. */
-      maxTurns: 12,
+      maxTurns: 24,
       /**
        * Turns in an argument. Much lower on purpose: a real person stops
        * defending themselves to someone calling them a cheater, and trading
@@ -179,10 +184,8 @@ export const DEFAULTS = {
     spotClaimRadius: 20,
 
     accusation: {
-      /** Only fire if the accuser is nearby, mentioned us, or just talked to us. */
+      /** Only fire if the accuser is nearby, mentioned us, or blocked our path. */
       requireDirected: true,
-      /** How long after our own message a reply still counts as directed at us. */
-      replyWindowMs: 30000,
     },
     mention: {
       enabled: true,

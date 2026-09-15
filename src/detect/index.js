@@ -219,8 +219,8 @@ export function detectStandDown(store, config, message, ts = Date.now()) {
 
 /**
  * Detects someone accusing us of cheating/macroing. Requires the accusation to
- * be aimed at us: our name is in it, they are nearby, they have been blocking
- * us, or they are replying just after we spoke.
+ * be aimed at us: our name is in it, they are nearby, or they have been
+ * blocking us. A distant "u macroing" is too ambiguous to answer.
  */
 export function detectAccusation(store, config, message, ts = Date.now()) {
   if (!message.sender || message.system) return null;
@@ -228,7 +228,7 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
   if (config.ignore.includes(message.sender)) return null;
   if (!ACCUSATION.test(message.content)) return null;
 
-  const { requireDirected, replyWindowMs } = config.detect.accusation;
+  const { requireDirected } = config.detect.accusation;
   const named = mentions(message.content, config.username, config.aliases);
 
   // "most people macro that" is a remark about the game, not a charge against
@@ -237,21 +237,22 @@ export function detectAccusation(store, config, message, ts = Date.now()) {
   if (target === 'someone-else') return null;
   const nearby = store.isNearby(message.sender, config.detect.chatRadius, ts);
   const hasHistory = store.blocksWithin(message.sender, 120000, ts) > 0;
-  const repliedToUs = store.lastOutgoing && ts - store.lastOutgoing.ts <= replyWindowMs;
-
-  // Pointed straight at us ("u macroing?") needs no further corroboration.
-  // Anything vaguer has to be plausibly aimed at us by the situation.
-  const directed = target === 'us' || named || nearby || hasHistory || repliedToUs;
+  // A name is explicit; otherwise, physical proximity or a recent obstruction
+  // makes a second-person accusation plausibly about us. Across the lobby it
+  // is just as likely to be aimed at another player, so stay out of it.
+  const directed = named || nearby || hasHistory;
   if (requireDirected && !directed) return null;
 
   const priors = (store.players.get(message.sender)?.accusations ?? []).filter(
     (t) => ts - t <= 300000,
   ).length;
-
+  const anger = priors >= 2 ? 3 : priors >= 1 ? 2 : 1;
   return {
     kind: 'accusation',
     subject: message.sender,
-    severity: priors >= 2 ? 3 : 2,
+    severity: anger,
+    anger,
+    escalates: anger > 1,
     conversational: true,
     evidence:
       `${message.sender} said "${message.content}" — they are accusing me of cheating or macroing` +

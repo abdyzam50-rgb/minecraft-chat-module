@@ -68,3 +68,26 @@ test('only speaks in enabled channels', () => {
   assert.equal(policy.check({ ...trigger, channel: 'party' }).allowed, true);
   assert.equal(policy.check({ ...trigger, channel: 'whisper' }).allowed, true);
 });
+
+
+test('cuts off repeated macro checks after three replies', () => {
+  const { policy, advance } = makePolicy({ limits: { conversation: { cooldownMs: 0 } } });
+  const check = { kind: 'macro_check', subject: 'Griefer', channel: 'all', conversational: true };
+  policy.record(check, 'yh');
+  policy.record(check, 'still here');
+  policy.record(check, 'what');
+  advance(1000);
+  const result = policy.check(check);
+  assert.equal(result.allowed, false);
+  assert.match(result.reason, /letting it go/);
+});
+
+test('allows a natural repeat outside short-term memory', () => {
+  const { policy, advance } = makePolicy({ chat: { repeatHistory: 3 }, limits: { globalCooldownMs: 0, perKindCooldownMs: 0, perPlayerCooldownMs: 0, maxConsecutivePerPlayer: 99 } });
+  policy.record(trigger, 'first');
+  policy.record(trigger, 'second');
+  policy.record(trigger, 'third');
+  policy.record(trigger, 'fourth');
+  advance(1000);
+  assert.equal(policy.check(trigger, 'first').allowed, true);
+});

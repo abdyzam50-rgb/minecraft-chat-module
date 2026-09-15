@@ -118,7 +118,7 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     formatNearby(store, ts),
     '',
     'Recent chat (newest last):',
-    formatChat(store.recentChat(12), ts),
+    formatChat(store.recentChat(24), ts),
     '',
     `What just happened (${trigger.kind}):`,
     `  ${trigger.evidence}`,
@@ -232,6 +232,8 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
       '',
       'This one is an accusation. Do not admit to anything, do not explain your setup, and do not lecture them about the rules. Deny it once, briefly, and move on.',
     );
+    if (trigger.anger >= 2) lines.push('They have already pressed this point. Be shorter and colder; do not reopen the argument.');
+    if (trigger.anger >= 3) lines.push('This is the last response to this accusation. After it, leave further pestering unanswered.');
   }
 
   if (trigger.kind === 'spot_claim') {

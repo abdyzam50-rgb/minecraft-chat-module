@@ -1,15 +1,7 @@
 import { findRepeat } from './similarity.js';
 
 /** Exchanges worth cutting short rather than seeing through. */
-const ARGUMENT_KINDS = new Set(['accusation', 'hostile']);
-
-/**
- * Answering a macro check is not optional. Someone typing "say something if ur
- * real" is testing for exactly one thing — silence — and a bot that has talked
- * itself into a rate limit fails that test perfectly. Nothing here except the
- * mute guards and the repeat guard may suppress one.
- */
-const MUST_ANSWER = new Set(['macro_check']);
+const ARGUMENT_KINDS = new Set(['accusation', 'hostile', 'macro_check']);
 
 /**
  * Rate limiting and repeat suppression.
@@ -52,13 +44,11 @@ export class Policy {
     const conversing = Boolean(trigger.conversational);
     const arguing = ARGUMENT_KINDS.has(trigger.kind);
 
-    // Only a check they TYPED must be answered. A callout we raise because
-    // someone is stood in our path is ours to pace — nobody is waiting on it.
-    const mustAnswer = MUST_ANSWER.has(trigger.kind) && conversing;
+    // A conversation runs at its own pace. A callout we raise because someone
+    // is stood in our path remains subject to the normal global cooldown.
     const last = this.sent[this.sent.length - 1];
     const baseGap = conversing ? C.cooldownMs : L.globalCooldownMs;
-    // mustAnswer may shorten the gap, never lengthen it.
-    const gap = mustAnswer ? Math.min(baseGap, 1000) : baseGap;
+    const gap = baseGap;
     if (last && ts - last.ts < gap) {
       return {
         allowed: false,
@@ -74,15 +64,14 @@ export class Policy {
 
     // An escalating reply continues an exchange we already started. The
     // per-player and per-kind cooldowns exist to stop the bot nagging the same
-    // person about a new thing — they are the wrong brake here, since a whole
-    // macro check plays out inside one 60s window and the bot would fall silent
-    // exactly when it was meant to lose its temper.
+    // person about a new thing, so they step aside while the player is actively
+    // talking to us.
     //
     // What still bounds it: the global cooldown between messages, the per
-    // minute and per hour caps, and the consecutive cap below — three replies
-    // to one player and it stops, no matter how long they keep standing there.
+    // minute and per-hour caps, and the argument cap below — after three
+    // hostile checks or accusations, the player gets silence.
     const escalating = Boolean(trigger.escalates);
-    const relaxed = escalating || conversing || mustAnswer;
+    const relaxed = escalating || conversing;
     const kindCooldown = relaxed ? 0 : L.perKindCooldownMs;
     const playerCooldown = relaxed ? 0 : L.perPlayerCooldownMs;
 
@@ -97,7 +86,7 @@ export class Policy {
       return { allowed: false, reason: `cooldown for ${trigger.kind}` };
     }
 
-    if (trigger.subject && !mustAnswer) {
+    if (trigger.subject) {
       const samePlayer = [...this.sent].reverse().find((s) => s.subject === trigger.subject);
       if (samePlayer && ts - samePlayer.ts < playerCooldown) {
         return { allowed: false, reason: `cooldown for ${trigger.subject}` };
@@ -126,7 +115,7 @@ export class Policy {
     }
 
     if (message) {
-      const repeat = findRepeat(message, this.recent(L.dedupeWindowMs, ts), {
+      const repeat = findRepeat(message, this.recent(L.dedupeWindowMs, ts).slice(0, this.config.chat.repeatHistory), {
         threshold: this.config.chat.similarityThreshold,
         names: [trigger.subject].filter(Boolean),
       });

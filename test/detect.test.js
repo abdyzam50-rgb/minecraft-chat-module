@@ -63,6 +63,7 @@ test('an accusation naming us counts even from far away', () => {
   const { config, store } = setup();
   const trigger = detectFromChat(store, config, chat('Stranger', 'techno is 100% cheating'), NOW);
   assert.equal(trigger?.kind, 'accusation');
+  assert.equal(detectFromChat(store, config, chat('Stranger', 'u macroing?'), NOW), null, 'a distant second-person accusation is too ambiguous');
 });
 
 test('accusations outrank plain mentions', () => {
