@@ -203,7 +203,9 @@ export class ChatAI extends EventEmitter {
 
     if (this.config.dryRun) {
       this.emit('skip', { trigger, reason: `dry run: would have said "${clean.message}"` });
-      return action;
+      // Returned so a caller can log what would have been said, and flagged so
+      // nothing downstream mistakes it for something to type.
+      return { ...action, dryRun: true };
     }
 
     this.policy.record(trigger, clean.message);

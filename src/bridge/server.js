@@ -45,7 +45,10 @@ export function startBridge(ai, { log = console.log } = {}) {
         for (const event of events) {
           try {
             const action = await ai.handle(event);
-            if (action) actions.push(action);
+            // A dry-run action is a record of what would have been said. It is
+            // never queued for /poll, so returning it here would be the one
+            // path that reaches the game with dry run on.
+            if (action && !action.dryRun) actions.push(action);
           } catch (err) {
             log(`[bridge] error handling ${event?.type}: ${err.message}`);
           }
