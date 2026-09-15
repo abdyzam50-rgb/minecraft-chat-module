@@ -13,11 +13,14 @@
   // after twenty, and OpenRouter's free pools are saturated as often as not.
   // Neither is dependable alone; together they usually are.
   //
-  // OPENAI_MODEL is a list, tried in order.
+  // OPENAI_MODEL is a list, tried in order, and these two are what
+  // GET /models reports this key can reach. The nemotron one is last on
+  // purpose: it reasons before answering, and a model that deliberates over
+  // "yh?" is the wrong shape for chat even when it is free.
   "vars": {
     "GEMINI_MODEL": "gemini-3.6-flash",
     "LLM_PROVIDER": "gemini",
     "OPENAI_BASE_URL": "https://api.tokenrouter.com/v1",
-    "OPENAI_MODEL": "google/gemma-4-26b-a4b-it:free, google/gemma-4-31b-it:free, nex-agi/nex-n2.5-mini:free, inclusionai/ling-3.0-flash-vl:free, liquid/lfm-2.5-2.6b:free"
+    "OPENAI_MODEL": "z-ai/glm-5.3-free, nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
   }
 }
