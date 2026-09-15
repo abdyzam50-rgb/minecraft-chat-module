@@ -177,7 +177,7 @@ the key server-side.
 
 The Worker speaks both upstreams the module does — Gemini, and any OpenAI-shaped
 `/chat/completions` gateway. Which one is a `cloudflare-worker/wrangler.jsonc`
-edit; the site currently runs on TokenRouter's free tier:
+edit:
 
 ```jsonc
 "LLM_PROVIDER": "openai",
@@ -185,8 +185,21 @@ edit; the site currently runs on TokenRouter's free tier:
 "OPENAI_MODEL": "z-ai/glm-5.3-free"
 ```
 
-Set it back to `"gemini"` to return to `GEMINI_MODEL`. With no `LLM_PROVIDER` at
-all it uses whichever key is configured, preferring Gemini. `/health` reports the provider and model it
+With no `LLM_PROVIDER` at all it uses whichever key is configured, preferring
+Gemini.
+
+**Two unrelated services are called TokenRouter**, and a key from one is an
+invalid token at the other:
+
+| host | keys | has |
+|---|---|---|
+| `api.tokenrouter.com` | no fixed prefix | `z-ai/glm-5.3-free`, `nvidia/nemotron-…:free` |
+| `api.tokenrouter.io` | `tr_…` | `auto:balance` and friends |
+
+Their unauthenticated errors tell them apart — `.com` says "Token not provided",
+`.io` says "Pass 'Authorization: Bearer tr_...'". An hour went into a `401:
+Invalid token` that was neither the URL nor the wiring: the gateway had read the
+Bearer header fine and simply refused the value. `/health` reports the provider and model it
 resolved, and the page puts the model name in its status line — when you are
 comparing how two models write "yh?", you want to know which one you are looking
 at without reading the deploy log.

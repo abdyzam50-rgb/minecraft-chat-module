@@ -113,6 +113,18 @@ jobs:
             sleep 5
           done
           [ "$ok" = 1 ] || { echo "::error::Site or API did not come up."; exit 1; }
+
+          # keyConfigured only proves a secret exists. A key the upstream
+          # rejects passed this check and shipped a site that could not answer
+          # anything, so spend one real request proving it can.
+          reply="$(curl -sS -X POST "$WORKER_URL/api/reply" \
+            -H 'content-type: application/json' \
+            -d '{"prompt":"Reply as JSON with fields respond (boolean), message (string), reason (string). Set message to the single word ok."}' || true)"
+          echo "reply=$reply"
+          case "$reply" in
+            *'"message"'*) : ;;
+            *) echo "::error::The API is reachable but did not answer: $reply"; exit 1 ;;
+          esac
           echo "### Test site" >> "$GITHUB_STEP_SUMMARY"
           echo "$WORKER_URL/" >> "$GITHUB_STEP_SUMMARY"
           echo "Deployed: $WORKER_URL/"
