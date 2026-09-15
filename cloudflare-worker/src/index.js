@@ -132,6 +132,8 @@ function modelsFor(env, provider) {
  */
 const PER_MODEL_MS = 9_000;
 const TOTAL_MS = 25_000;
+/** Long enough for a saturated pool to free a worker, short enough to wait. */
+const RETRY_WAIT_MS = 1_200;
 
 /** Keeps the API key on Cloudflare; the static site sends only a prompt. */
 export default {
@@ -229,26 +231,43 @@ export default {
  */
 async function replyFromAny(env, attempts, prompt) {
   const deadline = Date.now() + TOTAL_MS;
-  const failures = [];
+  const failures = {};
   const refused = new Set();
 
-  for (const attempt of attempts) {
-    if (Date.now() >= deadline) break;
-    if (refused.has(attempt.provider)) continue;
-    try {
-      const reply = attempt.provider === 'gemini'
-        ? await replyFromGemini(env, attempt.model, attempt.key, prompt)
-        : await tryModel(openaiBaseUrl(env), attempt.model, attempt.key, prompt);
-      // Which one actually answered: with a chain, /health only names the first.
-      return { ...reply, model: attempt.model, provider: attempt.provider };
-    } catch (error) {
-      if (error.fatal) refused.add(attempt.provider);
-      console.warn(`${attempt.provider}:${attempt.model} ${error.message}`);
-      failures.push(`${attempt.model} ${error.message}`);
+  // Every failure left once the keys are right is transient capacity — a
+  // spent minute of quota, a pool with no free worker. Those clear in
+  // seconds, so a second pass costs one short wait and turns a fair number
+  // of dead requests into replies. Two passes, because a third would not
+  // arrive in time to be worth reading.
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) {
+      const remaining = deadline - Date.now();
+      // Only worth waiting if there is time to actually use afterwards.
+      if (remaining < RETRY_WAIT_MS * 3) break;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_WAIT_MS));
+    }
+
+    for (const attempt of attempts) {
+      if (Date.now() >= deadline) break;
+      if (refused.has(attempt.provider)) continue;
+      try {
+        const reply = attempt.provider === 'gemini'
+          ? await replyFromGemini(env, attempt.model, attempt.key, prompt)
+          : await tryModel(openaiBaseUrl(env), attempt.model, attempt.key, prompt);
+        // Which one answered: with a chain, /health only names the first.
+        return { ...reply, model: attempt.model, provider: attempt.provider };
+      } catch (error) {
+        if (error.fatal) refused.add(attempt.provider);
+        console.warn(`${attempt.provider}:${attempt.model} ${error.message}`);
+        // Only the last word from each model, or one failing twice fills the
+        // error with the same sentence written out again.
+        failures[attempt.model] = `${attempt.model} ${error.message}`;
+      }
     }
   }
 
-  throw new Error(`nothing answered (${failures.join('; ') || 'out of time'})`);
+  const reported = Object.values(failures);
+  throw new Error(`nothing answered (${reported.join('; ') || 'out of time'})`);
 }
 
 function geminiError(status, detail) {
