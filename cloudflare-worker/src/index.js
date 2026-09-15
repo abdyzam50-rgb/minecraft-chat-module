@@ -312,6 +312,16 @@ async function tryModel(baseUrl, model, key, prompt) {
   }
 
   const completion = await response.json();
+
+  // Some gateways report a failure as 200 with an error object and no
+  // choices. Left unread, that surfaces as "returned nothing", which says
+  // nothing about a rate limit or a model that is down.
+  if (completion.error) {
+    const error = new Error(`${completion.error.message || 'gateway error'}`);
+    error.fatal = /invalid.*(key|token)|unauthorized/i.test(error.message);
+    throw error;
+  }
+
   const choice = completion.choices?.[0];
   const message = choice?.message ?? {};
 
