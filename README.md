@@ -503,6 +503,26 @@ never answering.
 
 Two things fix that.
 
+**A fumbled name gets a question, not an assumption.** `3127` for `3172` is a
+typo, not a different player — but it might also genuinely be someone else, so
+the bot asks instead of guessing either way:
+
+```
+Dream: 3127 you there   ->  me?
+Dream: nah not you      ->  alr            (and the thread closes)
+Dream: whos got sorrow  ->  (ignored — not ours any more)
+
+Dream: 3127 you there   ->  me?
+Dream: yeah u           ->  grinding ghosts here   (carries on as normal)
+```
+
+Matching is Damerau-Levenshtein, so a transposition counts as one edit — that's
+how names actually get fumbled. Tolerance is one edit for names of five
+characters or fewer, two above that. A name that exactly matches another player
+nearby is never read as a typo of yours, and it only ever asks once per fumble
+(`detect.mention.confirmWindowMs`, 90s). Turn it off with
+`detect.mention.answerNearMisses: false`.
+
 **A greeting from arm's length is for you.** Someone stood within
 `detect.mention.greetingRadius` (5m) saying nothing but "yo" or "hello?" gets
 answered without needing your name — at that distance in a public area they are

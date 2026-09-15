@@ -187,6 +187,13 @@ export const DEFAULTS = {
        * next to you is the least human thing the bot can do.
        */
       greetingRadius: 5,
+      /**
+       * Answer a fumbled version of our name — "3127" for "3172" — by asking
+       * rather than assuming. Set false to ignore near misses entirely.
+       */
+      answerNearMisses: true,
+      /** How long we wait for them to confirm before dropping it. */
+      confirmWindowMs: 90000,
       /** Answer whispers even when they don't include a question. */
       answerWhispers: true,
     },

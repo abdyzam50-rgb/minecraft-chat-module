@@ -4,7 +4,10 @@ import {
   accusationTarget,
   AGGRESSIVE,
   ACTIVITY_QUESTION,
+  CONFIRMATION,
+  DENIAL,
   isCompliment,
+  nearMiss,
   isGreetingOnly,
   isSmallTalk,
   HOSTILE_NUDGE,
@@ -144,6 +147,66 @@ export function detectMacroCheckTalk(store, config, message, ts = Date.now()) {
 
 function ordinal(n) {
   return ['zeroth', 'first', 'second', 'third', 'fourth', 'fifth'][n] ?? `${n}th`;
+}
+
+/**
+ * They typed something very close to our name, but not it.
+ *
+ * "3127" for "3172" is a fumbled name, not a different player. Answering it as
+ * though it were addressed to us is presumptuous; ignoring it is the thing a
+ * bot does. So ask — and remember we asked, so their "no" can be handled.
+ */
+export function detectNearMiss(store, config, message, ts = Date.now()) {
+  if (!config.detect.mention.answerNearMisses) return null;
+  if (!message.sender || message.system) return null;
+  if (message.sender === config.username) return null;
+  if (config.ignore.includes(message.sender)) return null;
+
+  // Already talking to them, or they got it right — nothing to ask about.
+  if (mentions(message.content, config.username, config.aliases)) return null;
+  if (store.inConversation(message.sender, config.limits.conversation.windowMs, ts)) return null;
+  // Do not ask twice about the same fumble.
+  if (store.awaitingAnswer(message.sender, config.detect.mention.confirmWindowMs, ts)) return null;
+  if (!store.isNearby(message.sender, config.detect.chatRadius, ts)) return null;
+
+  const others = [...store.players.keys()].filter((n) => n !== message.sender);
+  const typo = nearMiss(message.content, config.username, config.aliases, others);
+  if (!typo) return null;
+
+  return {
+    kind: 'maybe_mention',
+    subject: message.sender,
+    severity: 1,
+    conversational: true,
+    uncertain: true,
+    typo,
+    evidence: `${message.sender} said "${message.content}". They wrote "${typo}", which is nearly my name (${config.username}) but not it — they may have fumbled it, or they may mean someone else.`,
+    channel: message.channel === 'whisper' ? 'whisper' : message.channel,
+  };
+}
+
+/**
+ * We asked whether they meant us and they said no. Acknowledge it in as few
+ * characters as possible and drop the thread — carrying on talking to someone
+ * who just told you they were not addressing you is the giveaway.
+ */
+export function detectStandDown(store, config, message, ts = Date.now()) {
+  if (!message.sender || message.system) return null;
+  if (!store.awaitingAnswer(message.sender, config.detect.mention.confirmWindowMs, ts)) return null;
+
+  const text = message.content.trim();
+  if (CONFIRMATION.test(text)) return null; // they did mean us; carry on
+  if (!DENIAL.test(text)) return null;
+
+  return {
+    kind: 'stand_down',
+    subject: message.sender,
+    severity: 1,
+    conversational: true,
+    closes: true,
+    evidence: `${message.sender} said "${message.content}" — they were not talking to me after all.`,
+    channel: message.channel === 'whisper' ? 'whisper' : message.channel,
+  };
 }
 
 /**
@@ -338,10 +401,15 @@ export function detectMuted(message) {
  */
 export function detectFromChat(store, config, message, ts = Date.now()) {
   return (
+    // A denial answers a question we asked, so it comes before everything.
+    detectStandDown(store, config, message, ts) ??
     detectMacroCheckTalk(store, config, message, ts) ??
     detectAccusation(store, config, message, ts) ??
     detectSpotClaim(store, config, message, ts) ??
     detectHostile(store, config, message, ts) ??
+    // Before the plain mention: "yo 3712" contains a greeting, but it also
+    // contains an attempt at a name that missed. Asking beats assuming.
+    detectNearMiss(store, config, message, ts) ??
     detectMention(store, config, message, ts) ??
     null
   );

@@ -451,6 +451,8 @@
       opener: ["yh?", "?", "sup", "whats up"],
       smalltalk: ["all g", "no worries", "all good", "np"],
       confused: ["uh what?", "sorry what?", "wdym?", "eh?"],
+      maybe_mention: ["me?", "you talking to me?", "uh me?", "that me?"],
+      stand_down: ["alr", "ok", "no worries", "mb"],
       mention: ["just grinding ghosts", "ghosts in the mist", "grinding ghosts, you?"],
     },
     snarky: {
@@ -470,6 +472,8 @@
       opener: ["?", "yh?", "what", "wha"],
       smalltalk: ["all g", "np", "cool", "yh"],
       confused: ["uh what?", "what?", "wdym", "eh?"],
+      maybe_mention: ["me?", "u talking to me?", "uh me?", "that me?"],
+      stand_down: ["alr", "ok", "np", "mb"],
       mention: ["just grinding ghosts", "ghosts, same as ever", "grinding ghosts. you?"],
     },
     unfiltered: {
@@ -489,6 +493,8 @@
       opener: ["?", "what", "wha", "yh"],
       smalltalk: ["all g", "np", "yh", "cool"],
       confused: ["what?", "uh what", "wdym", "eh?"],
+      maybe_mention: ["me?", "u on about me?", "uh me?", "that me?"],
+      stand_down: ["alr", "ok", "aight", "mb"],
       mention: ["just grinding ghosts mate", "grinding ghosts", "ghosts, what else"],
     },
   };
@@ -556,6 +562,51 @@
   }
 
   const GREETING_WORD = /^(?:y+o+|h+e+y+|h+i+|hel+o+|sup|wsup|wsp|wsg|wassup|whats|good|wagwan|oi+|psst|a+y+o*|heya|hiya|hola|there|mate|bro|man|g)$/i;
+
+  const DENIAL = /^(?:no+|nah+|nope|not\s?(?:you|u|ur)\b|wasn'?t\s?(?:you|u|talking)|someone\s?else|other\s?(?:guy|one)|different\s?(?:guy|person))/i;
+  const CONFIRMATION = /^(?:y(?:e+a*h*|up|es|a)|you|u\b|ur|yh|correct|mhm)/i;
+
+  /**
+   * Damerau-Levenshtein, capped. A transposition counts as one edit because
+   * swapping two characters is the commonest way to fumble a name — "3127"
+   * for "3172" is exactly what this is for.
+   */
+  function editDistance(a, b, cap) {
+    if (Math.abs(a.length - b.length) > cap) return cap + 1;
+    const rows = [];
+    for (let i = 0; i <= a.length; i++) rows.push([i].concat(new Array(b.length).fill(0)));
+    for (let j = 0; j <= b.length; j++) rows[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      let best = Infinity;
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        let v = Math.min(rows[i][j - 1] + 1, rows[i - 1][j] + 1, rows[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+          v = Math.min(v, rows[i - 2][j - 2] + 1);
+        }
+        rows[i][j] = v;
+        best = Math.min(best, v);
+      }
+      if (best > cap) return cap + 1;
+    }
+    return rows[a.length][b.length];
+  }
+
+  /** Did they try to type our name and miss? Returns what they actually wrote. */
+  function nearMiss(text, otherPlayers) {
+    const target = SELF.toLowerCase();
+    const known = (otherPlayers || []).map(function (n) { return String(n).toLowerCase(); });
+    const tokens = String(text || "").split(/[^A-Za-z0-9_]+/).filter(Boolean);
+    for (let i = 0; i < tokens.length; i++) {
+      const lower = tokens[i].toLowerCase();
+      if (known.indexOf(lower) !== -1) continue;  // somebody else, spelled right
+      if (lower === target) return null;          // ours, spelled right
+      const allowed = target.length <= 5 ? 1 : 2;
+      if (Math.abs(lower.length - target.length) > allowed) continue;
+      if (editDistance(lower, target, allowed) <= allowed) return tokens[i];
+    }
+    return null;
+  }
 
   function stripName(text) {
     return String(text || "").replace(new RegExp(SELF, "gi"), " ").replace(/\s+/g, " ").trim();
@@ -672,6 +723,7 @@
     fuses: {},         // name -> {patience, rage} rolled on their first block
     anger: {},         // name -> highest anger level already spent on them
     checks: {},        // name -> [timestamps] of macro checks they TYPED at us
+    askedWho: {},      // name -> when we asked them "me?" after a fumbled name
     accusations: {},   // name -> count
     convo: {},         // name -> {lastTurn, turns}
     pathfinder: { state: "running", blockedBy: null },
@@ -949,6 +1001,12 @@
       history,
       "",
       "What just happened: " + trigger.evidence.replace(/<[^>]+>/g, ""),
+      trigger.kind === "maybe_mention"
+        ? 'They wrote "' + (trigger.typo || "") + '", which is nearly your name but not it. They probably fumbled it, or they may mean someone else. Do not assume either way and do not answer whatever they said — just ask, in as few characters as possible: "me?", "you talking to me?", "uh me?". Two or three words at most.'
+        : "",
+      trigger.kind === "stand_down"
+        ? 'You asked if they meant you and they said no. Acknowledge it and stop: "alr", "ok", "np", "mb". One or two words, no follow-up question. The exchange is over — do not keep talking to someone who just told you they were not talking to you.'
+        : "",
       trigger.compliment
         ? 'That is a compliment. Take it — agree, or be pleased, or be modestly pleased. One short line. Do not deflect it, do not play it down by explaining what you actually do, and do not correct them. Denying a compliment is what someone with a guilty conscience does.'
         : "",
@@ -1057,7 +1115,7 @@
   }
 
   function terseFor(trigger) {
-    if (!trigger.opener && !trigger.smalltalk) return null;
+    if (!trigger.opener && !trigger.smalltalk && !trigger.uncertain && !trigger.closes) return null;
     return { maxWords: 2, stripNames: [trigger.subject, shortName(trigger.subject || "")] };
   }
 
@@ -1159,6 +1217,19 @@
     const named = mentions(text, SELF);
     const blockCount = (state.blocks[player.name] || []).filter((t) => ts - t <= DETECT.windowMs).length;
 
+    // They answered a question we asked. "no" closes the thread; "yeah" just
+    // lets the ordinary conversation rules take over below.
+    const asked = state.askedWho[player.name];
+    if (asked && ts - asked <= 90000 && !CONFIRMATION.test(text.trim()) && DENIAL.test(text.trim())) {
+      delete state.askedWho[player.name];
+      delete state.convo[player.name];
+      return respond({
+        kind: "stand_down", subject: player.name, channel: channel,
+        conversational: true, closes: true,
+        evidence: shortName(player.name) + ' said "' + escapeHtml(text) + '" — they were not talking to me after all',
+      });
+    }
+
     // Most specific reading wins: "macro check, say something" matches the
     // accusation pattern too, but answering it on the ladder is the better reply.
     if (MACRO_CHECK_TALK.test(text) && (nearby || named)) {
@@ -1246,6 +1317,21 @@
           ? shortName(player.name) + ' said "' + escapeHtml(text) + '" — a compliment, not a question and not an accusation'
           : shortName(player.name) + (named ? " used my name" : " is carrying on our conversation"),
       });
+    }
+
+    // They typed something very close to our name but not it. Asking beats
+    // both assuming it was us and ignoring it.
+    if (!named && !open && !asked) {
+      const typo = nearMiss(text, PLAYERS.map(function (o) { return o.name; }));
+      if (typo && player.distance <= DETECT.chatRadius) {
+        state.askedWho[player.name] = ts;
+        return respond({
+          kind: "maybe_mention", subject: player.name, channel: channel,
+          conversational: true, uncertain: true, typo: typo,
+          evidence: shortName(player.name) + ' wrote "' + escapeHtml(typo) +
+            '", which is nearly my name but not it — they may have fumbled it, or may mean someone else',
+        });
+      }
     }
 
     explainSilence(player, text);
@@ -1368,6 +1454,8 @@
     "u real?",
     "ur macroing arent you",
     "yo wsg 3172",
+    "3127 you there",
+    "nah not you",
     "wsg 3172",
     "yo 3172",
     "mb g",
@@ -1437,6 +1525,7 @@
   el("resetBtn").addEventListener("click", () => {
     state.blocks = {}; state.accusations = {}; state.sent = []; state.rotation = {};
     state.log = []; state.fuses = {}; state.anger = {}; state.convo = {}; state.checks = {};
+    state.askedWho = {};
     state.pathfinder = { state: "running", blockedBy: null };
     chatLog.innerHTML = "";
     boot();

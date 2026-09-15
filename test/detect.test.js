@@ -359,3 +359,58 @@ test('a real sentence from someone close still needs our name', () => {
   store.updateNearby([{ name: 'Dream', distance: 2 }], NOW);
   assert.equal(detectFromChat(store, config, chat('Dream', 'anyone selling sorrow'), NOW), null);
 });
+
+test('a fumbled name gets a question, not an assumption', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+
+  const trigger = detectFromChat(store, config, chat('Dream', '3127 you there'), NOW);
+  assert.equal(trigger.kind, 'maybe_mention');
+  assert.equal(trigger.typo, '3127');
+  assert.equal(trigger.uncertain, true);
+});
+
+test('transpositions count as one typo, since that is how names get fumbled', () => {
+  const { config } = setup({ username: '3172' });
+  for (const text of ['3127 u there', 'yo 3712', '3173 hello', 'hey 317', '31722 wsg']) {
+    const fresh = setup({ username: '3172' });
+    fresh.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+    assert.equal(
+      detectFromChat(fresh.store, fresh.config, chat('Dream', text), NOW)?.kind,
+      'maybe_mention',
+      text,
+    );
+  }
+  assert.ok(config);
+});
+
+test('another player spelled right is not a typo of ours', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }, { name: 'Nova_77', distance: 8 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'Nova_77 you there'), NOW), null);
+  assert.equal(detectFromChat(store, config, chat('Dream', 'anyone got 4000 coins'), NOW), null);
+});
+
+test('saying no ends it; saying yes carries on', () => {
+  const denied = setup({ username: '3172' });
+  denied.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  denied.store.noteAskedWho('Dream', NOW);
+
+  const stand = detectFromChat(denied.store, denied.config, chat('Dream', 'nah not you'), NOW);
+  assert.equal(stand.kind, 'stand_down');
+  assert.equal(stand.closes, true);
+
+  const confirmed = setup({ username: '3172' });
+  confirmed.store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  confirmed.store.noteAskedWho('Dream', NOW);
+  const yes = detectFromChat(confirmed.store, confirmed.config, chat('Dream', 'yeah u'), NOW);
+  assert.notEqual(yes?.kind, 'stand_down', 'a yes is not a stand-down');
+});
+
+test('we only ask about a fumble once', () => {
+  const { config, store } = setup({ username: '3172' });
+  store.updateNearby([{ name: 'Dream', distance: 3 }], NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3127 hello'), NOW).kind, 'maybe_mention');
+  store.noteAskedWho('Dream', NOW);
+  assert.equal(detectFromChat(store, config, chat('Dream', '3127 hello again'), NOW), null);
+});

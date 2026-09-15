@@ -138,7 +138,7 @@ export class ChatAI extends EventEmitter {
     const nameFatigue = this.nameFatigue(trigger);
     const shout = (trigger.anger ?? 0) >= 3 && getPersona(this.config.persona).shouts;
     // A bare call-out or an acknowledgement gets two words, no name, always.
-    const terse = (trigger.opener || trigger.smalltalk)
+    const terse = (trigger.opener || trigger.smalltalk || trigger.uncertain || trigger.closes)
       ? {
           maxWords: this.config.chat.terseWords,
           stripNames: [trigger.subject, shortName(trigger.subject ?? '', { overrides: this.config.shortNames })],
@@ -210,6 +210,10 @@ export class ChatAI extends EventEmitter {
     this.policy.record(trigger, clean.message);
     this.store.recordOutgoing(clean.message);
     if (trigger.anger && trigger.subject) this.store.noteAnger(trigger.subject, trigger.anger);
+    // Remember we asked, so their "no" is understood as an answer to it.
+    if (trigger.uncertain && trigger.subject) this.store.noteAskedWho(trigger.subject);
+    // They said it was not us: drop the thread rather than keep talking.
+    if (trigger.closes && trigger.subject) this.store.closeConversation(trigger.subject);
     this.outbox.push(action);
     this.emit('say', action);
     return action;

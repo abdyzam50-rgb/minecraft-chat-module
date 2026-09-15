@@ -200,3 +200,72 @@ export function looksLikeQuestion(text) {
 
 /** Hypixel telling us we've been muted or warned — always stop talking. */
 export const MUTE_NOTICE = /(you (?:are|have been) (?:muted|banned)|cannot send|blocked by hypixel|punish)/i;
+
+/**
+ * Damerau-Levenshtein (optimal string alignment), capped.
+ *
+ * Counting a transposition as one edit rather than two matters here: swapping
+ * two characters is the commonest way to fumble a name, and "3127" for "3172"
+ * is exactly the case this exists for.
+ */
+function editDistance(a, b, cap = 3) {
+  if (Math.abs(a.length - b.length) > cap) return cap + 1;
+
+  const rows = [];
+  for (let i = 0; i <= a.length; i += 1) rows.push([i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j += 1) rows[0][j] = j;
+
+  for (let i = 1; i <= a.length; i += 1) {
+    let best = Infinity;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let value = Math.min(rows[i][j - 1] + 1, rows[i - 1][j] + 1, rows[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        value = Math.min(value, rows[i - 2][j - 2] + 1);
+      }
+      rows[i][j] = value;
+      best = Math.min(best, value);
+    }
+    if (best > cap) return cap + 1;
+  }
+  return rows[a.length][b.length];
+}
+
+/**
+ * Did they try to type our name and get it slightly wrong?
+ *
+ * "3127" for "3172" is a transposition, not a different player, and answering
+ * it confidently is as odd as ignoring it. Returns the token they actually
+ * typed so the reply can ask about it.
+ *
+ * @param {string} text
+ * @param {string} username
+ * @param {string[]} aliases
+ * @param {string[]} otherPlayers names we know are around, so a real player's
+ *   name is never read as a typo of ours
+ * @returns {string|null}
+ */
+export function nearMiss(text, username, aliases = [], otherPlayers = []) {
+  const targets = [username, ...aliases].filter(Boolean).map((t) => t.toLowerCase());
+  const known = new Set(otherPlayers.filter(Boolean).map((n) => n.toLowerCase()));
+
+  for (const token of String(text ?? '').split(/[^A-Za-z0-9_]+/).filter(Boolean)) {
+    const lower = token.toLowerCase();
+    if (known.has(lower)) continue; // that is somebody else, spelled correctly
+    for (const target of targets) {
+      if (lower === target) return null; // spelled ours correctly; not a near miss
+      // Short names need a tighter tolerance or every number looks like a typo.
+      const allowed = target.length <= 5 ? 1 : 2;
+      if (Math.abs(lower.length - target.length) > allowed) continue;
+      if (editDistance(lower, target, allowed) <= allowed) return token;
+    }
+  }
+  return null;
+}
+
+/** "no", "not you", "wasn't talking to u" — they meant someone else. */
+export const DENIAL =
+  /^(?:no+|nah+|nope|not\s?(?:you|u|ur)\b|wasn'?t\s?(?:you|u|talking)|someone\s?else|other\s?(?:guy|one)|different\s?(?:guy|person)|my\s?bad\s?(?:not|wrong))/i;
+
+/** "yeah", "you", "ye" — they did mean us. */
+export const CONFIRMATION = /^(?:y(?:e+a*h*|up|es|a)|you|u\b|ur|yh|correct|indeed|mhm)/i;

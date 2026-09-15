@@ -140,6 +140,22 @@ export function buildUserPrompt(store, config, trigger, ts = Date.now(), options
     lines.push('They asked what you are doing — say it: you are grinding ghosts.');
   }
 
+  if (trigger.kind === 'maybe_mention') {
+    lines.push(
+      '',
+      `They wrote "${trigger.typo}", which is nearly your name but not it. They probably fumbled it — or they may mean somebody else entirely.`,
+      'Do not assume either way and do not answer whatever they said. Just ask, in as few characters as possible: "me?", "you talking to me?", "uh me?". Two or three words at most.',
+    );
+  }
+
+  if (trigger.kind === 'stand_down') {
+    lines.push(
+      '',
+      'You asked if they meant you and they said no. Acknowledge it and stop: "alr", "ok", "np", "mb". One or two words, nothing else, no follow-up question.',
+      'The exchange is over. Do not keep talking to someone who has just told you they were not talking to you.',
+    );
+  }
+
   if (trigger.compliment) {
     lines.push(
       '',

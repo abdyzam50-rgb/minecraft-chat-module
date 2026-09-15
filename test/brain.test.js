@@ -1087,3 +1087,48 @@ test('the conversation opens even when we choose to stay quiet', async () => {
   await ai.handle({ type: 'chat', raw: '[MVP+] Dream: how long you been at it' });
   assert.equal(said.length, 1, 'the unnamed follow-up still counts as ours');
 });
+
+test('a misspelled name is asked about, and a no ends the exchange', async () => {
+  let clock = 1_700_000_000_000;
+  const ai = createChatAI({ username: '3172', persona: 'snarky', llm: { fallbackOnError: true }, now: () => clock });
+  const said = [];
+  ai.on('say', (a) => said.push([a.trigger, a.message]));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3127 you there' });
+  clock += 9000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: nah not you' });
+  clock += 9000;
+  // The thread is closed, so an unnamed line is no longer ours.
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: whos got sorrow' });
+
+  assert.deepEqual(said, [['maybe_mention', 'me?'], ['stand_down', 'alr']]);
+});
+
+test('a yes carries the conversation on as normal', async () => {
+  let clock = 1_700_000_000_000;
+  let call = 0;
+  const lines = ['me?', 'grinding ghosts here', 'since about 4am'];
+  const ai = createChatAI({
+    username: '3172',
+    now: () => clock,
+    client: {
+      messages: {
+        async create() {
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ respond: true, message: lines[Math.min(call++, 2)], reason: '' }) }] };
+        },
+      },
+    },
+  });
+  const said = [];
+  ai.on('say', (a) => said.push(a.trigger));
+
+  await ai.handle({ type: 'players', nearby: [{ name: 'Dream', distance: 3 }] });
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: 3127 you there' });
+  clock += 9000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: yeah u' });
+  clock += 9000;
+  await ai.handle({ type: 'chat', raw: '[MVP+] Dream: how long you been grinding' });
+
+  assert.deepEqual(said, ['maybe_mention', 'mention', 'mention']);
+});

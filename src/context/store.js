@@ -68,6 +68,8 @@ export class ContextStore {
         rage: null,
         /** Highest anger level we have actually sent to this player. */
         lastAnger: 0,
+        /** When we last asked them "me?" after they fumbled our name. */
+        askedWhoTs: null,
       });
     }
     return this.players.get(name);
@@ -203,6 +205,23 @@ export class ContextStore {
   /** How many times we have answered them in this exchange. */
   conversationTurns(name) {
     return this.conversations.get(name)?.turns ?? 0;
+  }
+
+  /** We asked whether they meant us, and are waiting to hear. */
+  noteAskedWho(name, ts = this.now()) {
+    this.player(name).askedWhoTs = ts;
+  }
+
+  awaitingAnswer(name, windowMs, ts = this.now()) {
+    const asked = this.players.get(name)?.askedWhoTs;
+    return Boolean(asked && ts - asked <= windowMs);
+  }
+
+  /** They said it was not us. Drop the thread and stop assuming. */
+  closeConversation(name) {
+    this.conversations.delete(name);
+    const p = this.players.get(name);
+    if (p) p.askedWhoTs = null;
   }
 
   recordOutgoing(message, ts = this.now()) {
