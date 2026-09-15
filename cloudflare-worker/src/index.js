@@ -313,11 +313,19 @@ async function tryModel(baseUrl, model, key, prompt) {
 
   const completion = await response.json();
   const choice = completion.choices?.[0];
-  const text = choice?.message?.content || '';
-  if (!text) throw new Error(`returned nothing (${choice?.finish_reason || 'no choice'})`);
+  const message = choice?.message ?? {};
+
+  // A reasoning model may leave content empty and put everything in its own
+  // reasoning field, under any of several names depending on the gateway.
+  // The answer is in there; it just is not where a chat model puts it.
+  const text = message.content || message.reasoning_content || message.reasoning || '';
+  if (!text) {
+    const shape = Object.keys(message).join(',') || 'no message';
+    throw new Error(`returned nothing (${choice?.finish_reason || 'no choice'}; fields: ${shape})`);
+  }
 
   const reply = parseReply(text.replace(THINK_BLOCK, '').trim());
-  if (!reply) throw new Error('returned unparseable JSON');
+  if (!reply) throw new Error(`returned unparseable JSON (${choice?.finish_reason || 'no reason'})`);
   return reply;
 }
 
@@ -354,7 +362,11 @@ function callOpenAI(baseUrl, model, key, prompt, withSchema) {
     headers,
     body: JSON.stringify({
       model,
-      max_tokens: 800,
+      // A reasoning model spends its budget thinking before it writes
+      // anything, and a cap sized for a one-line reply is entirely consumed
+      // before the reply starts — which comes back as an empty answer rather
+      // than as an error.
+      max_tokens: /reason|think/i.test(model) ? 4000 : 800,
       messages: [{ role: 'user', content: prompt }],
       response_format: withSchema
         ? { type: 'json_schema', json_schema: { name: 'reply', strict: true, schema: REPLY_SCHEMA_JSON } }
